@@ -1,0 +1,29 @@
+---
+title: 시스템 설계 주제 지도
+description: 시스템 설계 면접에 필요한 핵심 주제를 요청이 흐르는 순서대로 묶은 지도입니다. 각 주제는 장단점과 더 읽을거리를 함께 정리합니다.
+original: https://github.com/donnemartin/system-design-primer#index-of-system-design-topics
+---
+
+import TopicGrid from '~/components/TopicGrid.astro';
+
+> 다양한 시스템 설계 주제의 요약과 장단점입니다. **모든 것은 트레이드오프입니다.**
+>
+> 각 섹션에는 더 깊이 공부할 수 있는 자료 링크가 있습니다.
+
+![Twitter 타임라인과 검색 서비스를 설계한 전체 아키텍처 다이어그램](@repo/images/jrUBAF7.png)
+
+시스템 설계가 처음이라면 [여기서 시작하세요](/topics/start-here/). 확장성 강의와 글로 공통 어휘를 만든 뒤, **성능 vs 확장성**, **지연 시간 vs 처리량**, **가용성 vs 일관성** 같은 고수준 트레이드오프를 보고, DNS, CDN, 로드 밸런서처럼 더 구체적인 주제로 들어갑니다.
+
+<TopicGrid />
+
+:::tip[주제를 공부하는 순서]
+위 지도는 사용자의 요청이 시스템을 통과하는 순서를 따릅니다. 처음에는 위에서부터 차례로 읽고, 두 번째부터는 [문제 해설](/system-design/)을 풀다가 막히는 주제로 돌아오는 방식이 효과적입니다. 이미 공부한 주제에는 체크 표시가 붙습니다.
+:::
+
+## 아직 다루지 않는 주제
+
+원문에서 작성 중(under development)으로 남아 있는 주제입니다. 해설 곳곳에 이름이 나오므로 따로 찾아 읽어 두면 좋습니다.
+
+- MapReduce를 이용한 분산 컴퓨팅
+- 일관된 해싱(Consistent hashing)
+- 스캐터 개더(Scatter gather)

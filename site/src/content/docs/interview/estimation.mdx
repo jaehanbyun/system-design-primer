@@ -1,0 +1,89 @@
+---
+title: 어림 계산 (Back-of-the-envelope)
+description: 시스템 설계 면접에서 요구하는 어림 계산 방법 — 해설에서 쓰는 월·초 환산 규칙, QPS·저장량·대역폭 계산 순서와 계산기를 정리합니다.
+original: https://github.com/donnemartin/system-design-primer#back-of-the-envelope-calculations
+---
+
+import EstimationCalculator from '~/components/EstimationCalculator.astro';
+
+:::note[핵심 요약]
+- 어림 계산의 목적은 정확한 답이 아니라 **설계를 바꿀 만큼 큰 숫자인지** 판단하는 것입니다.
+- 해설은 모두 같은 규칙을 씁니다. **한 달 ≈ 250만 초**, 그래서 **초당 1요청 ≈ 월 250만 요청**, **초당 400요청 ≈ 월 10억 요청**입니다.
+- 계산 순서는 **요청 수 → QPS → 저장량 → 대역폭**입니다. 1건의 크기를 먼저 정하면 나머지는 곱셈입니다.
+- [2의 거듭제곱 표](/appendix/powers-of-two/)와 [지연 시간 숫자](/appendix/latency-numbers/)를 함께 외워 두면 빠릅니다.
+:::
+
+원문의 [면접 접근법](/interview/approach/)은 “손으로 몇 가지를 어림해 보라는 요청을 받을 수 있다”고 말하고, [부록](/appendix/powers-of-two/)은 그 예로 디스크에서 이미지 썸네일 100개를 만드는 데 얼마나 걸릴지, 어떤 자료 구조가 메모리를 얼마나 차지할지를 듭니다. 이 페이지는 해설에서 실제로 쓰는 어림 규칙을 모으고, 직접 연습할 수 있는 계산기를 제공합니다.
+
+## 해설에서 쓰는 환산표
+
+모든 [시스템 설계 해설](/system-design/)은 사용량을 계산할 때 다음 환산표(Handy conversion guide)를 씁니다.
+
+| 기준 | 값 |
+|---|---|
+| 한 달 | 약 250만 초 (2.5 million seconds) |
+| 초당 1요청 | 월 250만 요청 |
+| 초당 40요청 | 월 1억 요청 |
+| 초당 400요청 | 월 10억 요청 |
+
+한 달은 실제로 약 259만 초(30일 × 86,400초)지만, 계산을 쉽게 하려고 250만 초로 둥글립니다. 면접에서는 이 정도 오차는 문제가 되지 않습니다.
+
+## 계산 순서
+
+[Pastebin 해설](/system-design/pastebin/)의 사용량 계산을 예로 들면 다음과 같습니다.
+
+1. **1건의 크기를 정합니다.** 붙여넣기 내용 1 KB + `shortlink` 7바이트 + `expiration_length_in_minutes` 4바이트 + `created_at` 5바이트 + `paste_path` 255바이트 ≈ 1.27 KB
+2. **월간 저장량 = 1건 크기 × 월간 건수.** 1.27 KB × 월 1,000만 건 = 월 12.7 GB, 3년이면 약 450 GB, 단축 링크는 3년간 3억 6,000만 개
+3. **QPS = 월간 요청 ÷ 250만 초.** 쓰기 월 1,000만 건 → 초당 약 4건, 읽기는 10배인 월 1억 건 → 초당 약 40건
+4. **대역폭 = QPS × 1건 크기.** 필요하면 피크 배수를 곱해 최대치를 봅니다.
+
+## 계산기로 연습하기
+
+예시 버튼을 누르면 해설의 값이 채워집니다. 숫자를 바꿔 가며 결과가 어떻게 달라지는지 확인해 보세요.
+
+<EstimationCalculator />
+
+:::caution[면접에서 주의할 점]
+- 어림 계산을 해야 하는지는 **면접관과 먼저 확인**하세요. 해설도 매번 “Clarify with your interviewer if you should run back-of-the-envelope usage calculations.”라고 적어 둡니다.
+- 피크 배수, 보관 기간, 압축 여부처럼 **가정한 값은 소리 내어 말하세요.** 숫자 자체보다 가정이 타당한지가 더 중요합니다.
+- 계산 결과는 설계 결정으로 이어져야 합니다. 예를 들어 초당 읽기 10만 건이라면 [메모리 캐시](/topics/cache/)와 [읽기 복제본](/topics/database/rdbms/#마스터-슬레이브-복제-master-slave-replication)을, 3년 5.4 PB라면 미디어를 객체 저장소에 두는 방안([Twitter 해설](/system-design/twitter/))과 데이터 샤딩을 이야기해야 합니다.
+:::
+
+## 자주 쓰는 기준 숫자
+
+| 항목 | 값 | 출처 |
+|---|---|---|
+| 2¹⁰ / 2²⁰ / 2³⁰ / 2⁴⁰ | 약 1천(KB) / 100만(MB) / 10억(GB) / 1조(TB) | [2의 거듭제곱 표](/appendix/powers-of-two/) |
+| 메인 메모리 참조 | 100 ns | [지연 시간 숫자](/appendix/latency-numbers/) |
+| 같은 데이터 센터 안 왕복 | 500 µs | [지연 시간 숫자](/appendix/latency-numbers/) |
+| HDD / 1 Gbps 이더넷 / SSD / 메인 메모리 순차 읽기 | 30 MB/s / 100 MB/s / 1 GB/s / 4 GB/s | [지연 시간 숫자](/appendix/latency-numbers/) |
+| 초당 전 세계 왕복 / 데이터 센터 안 왕복 | 6–7회 / 2,000회 | [지연 시간 숫자](/appendix/latency-numbers/) |
+
+## 스스로 점검하기
+
+<details>
+<summary>월 1억 건의 요청은 초당 몇 건인가요?</summary>
+
+약 40건입니다. 한 달을 250만 초로 보면 1억 ÷ 250만 = 40입니다.
+
+</details>
+
+<details>
+<summary>1건에 10 KB인 데이터가 하루 5억 건씩 쌓이면 한 달에 얼마나 늘어나나요?</summary>
+
+10 KB × 5억 건 × 30일 = 150 TB입니다. [Twitter 해설](/system-design/twitter/)의 트윗 저장량 계산과 같습니다.
+
+</details>
+
+<details>
+<summary>읽기 요청이 쓰기보다 10배 많다면 설계에서 무엇을 먼저 고민해야 하나요?</summary>
+
+읽기 경로를 가볍게 만드는 방법입니다. 자주 읽는 데이터는 메모리 캐시에 두고, 데이터베이스는 읽기 복제본으로 읽기 부하를 나누는 방안을 검토합니다.
+
+</details>
+
+## 출처 및 더 읽을거리
+
+- [Use back of the envelope calculations](http://highscalability.com/blog/2011/1/26/google-pro-tip-use-back-of-the-envelope-calculations-to-choo.html)
+- [Latency numbers every programmer should know - 1](https://gist.github.com/jboner/2841832)
+- [Latency numbers every programmer should know - 2](https://gist.github.com/hellerbarde/2843375)

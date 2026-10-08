@@ -1,0 +1,95 @@
+---
+title: 지연 시간 숫자 (Latency numbers)
+description: 모든 프로그래머가 알아야 할 지연 시간 숫자를 표와 로그 스케일 차트로 비교하고, 어림 계산에 바로 쓰는 처리량 기준을 정리합니다.
+original: https://github.com/donnemartin/system-design-primer#latency-numbers-every-programmer-should-know
+---
+
+import LatencyChart from '~/components/LatencyChart.astro';
+
+:::note[핵심 요약]
+- 캐시·메모리 참조는 나노초(ns), SSD 임의 읽기와 데이터 센터 안 왕복은 마이크로초(µs), HDD 탐색과 대륙 간 왕복은 밀리초(ms) 단위입니다.
+- 메인 메모리 참조(100 ns)는 L1 캐시의 200배, 데이터 센터 안 왕복(500 µs)은 메모리 참조의 5,000배입니다.
+- **순차 읽기 속도**: HDD 30 MB/s, 1 Gbps 이더넷 100 MB/s, SSD 1 GB/s, 메인 메모리 4 GB/s.
+- 대륙을 오가는 패킷 왕복은 150 ms로, 1초에 전 세계를 6–7번밖에 왕복하지 못합니다.
+:::
+
+## 지연 시간 비교
+
+<LatencyChart />
+
+원문의 표는 다음과 같습니다.
+
+```
+Latency Comparison Numbers
+--------------------------
+L1 cache reference                           0.5 ns
+Branch mispredict                            5   ns
+L2 cache reference                           7   ns                      14x L1 cache
+Mutex lock/unlock                           25   ns
+Main memory reference                      100   ns                      20x L2 cache, 200x L1 cache
+Compress 1K bytes with Zippy            10,000   ns       10 us
+Send 1 KB bytes over 1 Gbps network     10,000   ns       10 us
+Read 4 KB randomly from SSD*           150,000   ns      150 us          ~1GB/sec SSD
+Read 1 MB sequentially from memory     250,000   ns      250 us
+Round trip within same datacenter      500,000   ns      500 us
+Read 1 MB sequentially from SSD*     1,000,000   ns    1,000 us    1 ms  ~1GB/sec SSD, 4X memory
+HDD seek                            10,000,000   ns   10,000 us   10 ms  20x datacenter roundtrip
+Read 1 MB sequentially from 1 Gbps  10,000,000   ns   10,000 us   10 ms  40x memory, 10X SSD
+Read 1 MB sequentially from HDD     30,000,000   ns   30,000 us   30 ms 120x memory, 30X SSD
+Send packet CA->Netherlands->CA    150,000,000   ns  150,000 us  150 ms
+
+Notes
+-----
+1 ns = 10^-9 seconds
+1 us = 10^-6 seconds = 1,000 ns
+1 ms = 10^-3 seconds = 1,000 us = 1,000,000 ns
+```
+
+## 위 숫자로 얻는 실용 지표
+
+- HDD에서 순차 읽기: 30 MB/s
+- 1 Gbps 이더넷에서 순차 읽기: 100 MB/s
+- SSD에서 순차 읽기: 1 GB/s
+- 메인 메모리에서 순차 읽기: 4 GB/s
+- 1초에 전 세계 왕복 6–7회
+- 1초에 데이터 센터 안 왕복 2,000회
+
+:::note[지연 시간 시각화]
+원문은 이 숫자들을 시각화한 외부 이미지를 싣고 있지만, 지금은 이미지 링크가 깨져 있습니다. 위 차트가 같은 숫자를 로그 스케일로 보여 줍니다.
+:::
+
+## 면접에서는
+
+- **캐시를 제안할 근거**가 됩니다. 메모리에서 1 MB를 읽는 데 250 µs, HDD에서는 30 ms로 약 120배 차이가 납니다. 자주 읽는 데이터를 메모리 캐시에 두자는 주장은 이 숫자로 뒷받침할 수 있습니다.
+- **데이터 센터 간 호출은 비쌉니다.** 같은 데이터 센터 안 왕복은 0.5 ms지만 대륙 간 왕복은 150 ms입니다. 사용자와 가까운 곳에서 응답하는 [CDN](/topics/cdn/)이나 지역별 배치를 이야기할 때 씁니다.
+- **처리 시간 어림**에도 씁니다. 예를 들어 HDD에서 1 GB를 순차로 읽으면 약 33초, SSD라면 약 1초가 걸립니다.
+
+## 스스로 점검하기
+
+<details>
+<summary>메인 메모리 참조는 L1 캐시 참조보다 몇 배 느린가요?</summary>
+
+약 200배입니다(0.5 ns 대 100 ns). L2 캐시와 비교하면 약 20배입니다.
+
+</details>
+
+<details>
+<summary>SSD에서 1 MB를 순차로 읽는 시간과 HDD에서 읽는 시간은 각각 얼마인가요?</summary>
+
+SSD는 약 1 ms, HDD는 약 30 ms입니다. HDD 순차 읽기는 메모리의 120배, SSD의 30배 느립니다.
+
+</details>
+
+<details>
+<summary>1초 동안 같은 데이터 센터 안에서는 몇 번 왕복할 수 있나요?</summary>
+
+약 2,000번입니다(왕복 1회 500 µs). 전 세계를 오가는 왕복은 1초에 6–7번 정도입니다.
+
+</details>
+
+## 출처 및 더 읽을거리
+
+- [Latency numbers every programmer should know - 1](https://gist.github.com/jboner/2841832)
+- [Latency numbers every programmer should know - 2](https://gist.github.com/hellerbarde/2843375)
+- [Designs, lessons, and advice from building large distributed systems](http://www.cs.cornell.edu/projects/ladis2009/talks/dean-keynote-ladis2009.pdf)
+- [Software Engineering Advice from Building Large-Scale Distributed Systems](https://static.googleusercontent.com/media/research.google.com/en//people/jeff/stanford-295-talk.pdf)

@@ -1,0 +1,101 @@
+---
+title: 콜센터 설계 (Design a call center)
+description: 상담원·슈퍼바이저·디렉터 세 직급에 통화를 배정하고, 처리하지 못한 통화를 상위 직급으로 넘기는 콜센터를 객체 지향으로 설계합니다.
+original: https://github.com/donnemartin/system-design-primer/blob/master/solutions/object_oriented_design/call_center/call_center.ipynb
+---
+import { Code } from '@astrojs/starlight/components';
+import source from '@repo/solutions/object_oriented_design/call_center/call_center.py?raw';
+
+:::note[이 문제에서 배우는 것]
+- 직급(`Rank`)과 통화 상태(`CallState`)를 열거형(enum)으로 표현하고, 직원의 공통 동작을 추상 클래스 `Employee`에 모으는 상속 구조
+- 낮은 직급부터 빈 직원을 찾고, 아무도 없으면 대기열에 넣는 통화 배정(dispatch) 흐름
+- 처리하지 못한 통화를 상위 직급으로 넘기는 에스컬레이션(escalation)을 직급별 하위 클래스로 표현하는 방법
+- 직원과 콜센터가 서로를 참조하고, 직원이 콜센터에 이벤트를 알리는(notify) 방식의 협력
+:::
+
+## 제약 조건과 가정 (Constraints and assumptions)
+
+- 콜센터에는 어떤 직급의 직원이 있나요?
+  - 상담원(operator), 슈퍼바이저(supervisor), 디렉터(director)
+- 처음 걸려 온 통화는 항상 상담원이 받는다고 가정해도 될까요?
+  - 네.
+- 응대할 수 있는 상담원이 없거나 상담원이 처리할 수 없는 통화라면 슈퍼바이저에게 넘어가나요?
+  - 네.
+- 응대할 수 있는 슈퍼바이저가 없거나 슈퍼바이저가 처리할 수 없는 통화라면 디렉터에게 넘어가나요?
+  - 네.
+- 디렉터는 모든 통화를 처리할 수 있다고 가정해도 될까요?
+  - 네.
+- 아무도 받을 수 없는 통화는 어떻게 되나요?
+  - 대기열(queue)에 들어갑니다.
+- 대기열 맨 앞에 끼워 주는 'VIP' 통화도 처리해야 하나요?
+  - 아니요.
+- 입력이 유효하다고 가정해도 될까요, 아니면 직접 검증해야 하나요?
+  - 유효하다고 가정합니다.
+
+## 설계 개요
+
+| 클래스 | 역할 | 핵심 속성·메서드 |
+|---|---|---|
+| `Rank` (enum) | 직원의 직급. 통화를 어느 직급부터 배정할지도 이 값으로 나타냄 | `OPERATOR`, `SUPERVISOR`, `DIRECTOR` |
+| `Employee` (추상 클래스) | 모든 직원의 공통 동작: 통화 받기, 완료하기, 넘기기 | `employee_id`, `name`, `rank`, `call`, `call_center`, `take_call()`, `complete_call()`, `escalate_call()`(추상), `_escalate_call()` |
+| `Operator` | 상담원. 넘기면 슈퍼바이저 단계로 올라감 | `escalate_call()` |
+| `Supervisor` | 슈퍼바이저. 넘기면 디렉터 단계로 올라감 | `escalate_call()` |
+| `Director` | 디렉터. 모든 통화를 처리해야 하므로 넘기려 하면 예외 발생 | `escalate_call()` → `NotImplementedError` |
+| `CallState` (enum) | 통화 상태 | `READY`, `IN_PROGRESS`, `COMPLETE` |
+| `Call` | 걸려 온 통화 하나 | `state`, `rank`, `employee` |
+| `CallCenter` | 직급별 직원 목록과 대기열을 갖고 통화를 배정 | `operators`, `supervisors`, `directors`, `queued_calls`, `dispatch_call()`, `_dispatch_call()`, `notify_call_escalated()`, `notify_call_completed()`, `dispatch_queued_call_to_newly_freed_employee()` |
+
+- **통화 배정**: `dispatch_call()`은 먼저 통화의 `rank`가 세 직급 중 하나인지 확인하고, 아니면 `ValueError`를 던집니다. 그다음 `rank`가 `OPERATOR`면 상담원에게 배정을 시도하고, 아직 아무도 받지 못했거나 `rank`가 `SUPERVISOR`면 슈퍼바이저에게, 그래도 받지 못했거나 `rank`가 `DIRECTOR`면 디렉터에게 시도합니다. 끝내 받을 사람이 없으면 통화를 `queued_calls`(`deque`)에 넣습니다.
+- **빈 직원 찾기**: `_dispatch_call()`은 직원 목록을 앞에서부터 훑어, `call`이 `None`인(통화 중이 아닌) 첫 직원에게 `take_call()`을 맡깁니다. `take_call()`은 직원과 통화가 서로를 가리키게 하고 통화 상태를 `IN_PROGRESS`로 바꿉니다. docstring대로 직원은 언제나 통화를 받는다고 가정합니다.
+- **에스컬레이션**: 하위 클래스의 `escalate_call()`이 다음 직급을 정한 뒤, 부모 클래스의 `_escalate_call()`을 호출합니다. `_escalate_call()`은 통화 상태를 `READY`로 되돌리고, 직원의 `call`을 비운 다음, `call_center.notify_call_escalated(call)`로 콜센터에 알립니다. 직급마다 다른 것은 "다음 직급이 무엇인가"뿐이므로 나머지 절차는 부모 클래스에 한 번만 둡니다. `Director`는 "디렉터는 모든 통화를 처리할 수 있다"는 가정에 따라 `NotImplementedError`를 던집니다.
+- **통화 완료**: `complete_call()`은 통화 상태를 `COMPLETE`로 바꾸고 `notify_call_completed()`로 콜센터에 알립니다. 이 메서드는 직원의 `call`을 비우지 않으므로, 콜센터 쪽 후속 처리가 없으면 통화를 마친 직원은 계속 통화 중으로 취급됩니다.
+- **미구현 부분**: `CallCenter`의 `notify_call_escalated()`, `notify_call_completed()`, `dispatch_queued_call_to_newly_freed_employee()`는 원본 코드에서 구현되지 않은 채(`pass`) 남아 있습니다. 이름으로 보아 넘어온 통화를 상위 직급에 다시 배정하고, 자리가 난 직원에게 대기열의 통화를 넘겨주는 역할을 맡을 자리입니다.
+
+## 해설 코드
+
+<Code code={source} lang="py" title="call_center.py" />
+
+:::caution[코드를 읽을 때 주의할 점]
+원본 코드는 설계를 설명하기 위한 스케치에 가깝고, 그대로 실행하면 문제가 되는 부분이 있습니다.
+
+- `Operator`·`Supervisor`·`Director`의 생성자는 `Employee.__init__()`에 `call_center`를 넘기지 않고, `Supervisor`와 `Director`는 자기 클래스가 아닌 `super(Operator, self)`를 호출합니다. 이대로는 직원 객체를 만들 때 `TypeError`가 납니다.
+- 하위 클래스의 `escalate_call()`은 `call.level`을 바꾸지만, `Call`이 직급을 담는 속성은 `rank`입니다. 상위 직급으로 다시 배정하려면 `call.rank`를 올려야 합니다.
+- `rank`가 `DIRECTOR`인 통화는 두 번째 조건에서 `employee`가 아직 `None`이므로 슈퍼바이저 배정을 먼저 시도하고, 세 번째 조건에서 디렉터에게 다시 배정합니다. 빈 슈퍼바이저가 있으면 같은 통화가 두 직원에게 배정됩니다.
+:::
+
+## 면접에서는
+
+- **제약 조건부터 확인하세요.** 직급 구조, 첫 통화를 누가 받는지, 어떤 조건에서 위로 넘기는지, 아무도 받지 못할 때 어떻게 하는지, VIP 같은 우선순위가 있는지를 묻습니다. 여기서는 VIP가 없으므로 들어온 순서대로 처리하는 큐(`deque`)로 충분합니다.
+- **핵심 객체를 고르세요.** 직원(직급별 하위 클래스), 통화, 콜센터 세 가지입니다. 직급과 통화 상태처럼 값이 정해진 개념은 enum으로 표현합니다.
+- **관계를 설명하세요.** 직원은 처리 중인 통화와 소속 콜센터를 참조하고, 통화는 담당 직원을 참조하며, 콜센터는 직급별 직원 목록과 대기열을 가집니다. 직원이 통화를 넘기거나 마치면 콜센터에 알리고, 다음 배정은 콜센터가 결정합니다.
+- **확장 포인트를 짚어 두세요.** VIP 통화가 필요해지면 대기열을 우선순위 큐로 바꾸고, 직급이 늘어나면 `Rank`와 하위 클래스를 추가합니다. 직원이 많아 빈 직원을 선형 탐색하는 비용이 부담되면 직급별로 쉬고 있는 직원 목록을 따로 관리할 수 있습니다.
+
+## 스스로 점검하기
+
+<details>
+<summary>상담원이 모두 통화 중일 때 `rank`가 `OPERATOR`인 통화가 들어오면 어떻게 되나요?</summary>
+
+`_dispatch_call()`이 상담원 목록에서 `None`을 돌려주므로, `dispatch_call()`은 슈퍼바이저 목록에서 빈 직원을 찾습니다. 거기서도 찾지 못하면 디렉터 목록을 시도하고, 그래도 없으면 통화를 `queued_calls`에 넣습니다.
+
+</details>
+
+<details>
+<summary>`escalate_call()`을 추상 메서드로 두고 공통 절차를 `_escalate_call()`로 분리한 이유는 무엇인가요?</summary>
+
+직급마다 다른 것은 "다음 직급이 무엇인가"뿐이고(디렉터는 아예 넘길 수 없음), 통화 상태를 되돌리고 직원을 비우고 콜센터에 알리는 절차는 같습니다. 달라지는 부분만 하위 클래스가 구현하게 하면, 직급별 규칙을 표현하면서도 공통 절차를 중복해서 쓰지 않아도 됩니다.
+
+</details>
+
+<details>
+<summary>통화 하나를 배정하는 데 걸리는 시간은 어느 정도인가요?</summary>
+
+직급별 목록을 앞에서부터 훑어 빈 직원을 찾으므로, 최악의 경우 전체 직원 수에 비례하는 O(E)입니다(E는 직원 수). 아무도 받지 못해 대기열에 넣는 것은 `deque`의 `append()`이므로 O(1)입니다.
+
+</details>
+
+<details>
+<summary>VIP 통화를 지원해야 한다면 무엇을 바꿔야 하나요?</summary>
+
+`Call`에 VIP 여부나 우선순위 속성을 추가하고, 대기열에서 VIP 통화를 먼저 꺼내도록 해야 합니다. 대기열을 우선순위 큐로 바꾸거나 VIP용 큐를 따로 둘 수 있고, 지금 구조를 유지한다면 `deque`의 `appendleft()`로 VIP 통화를 맨 앞에 넣는 방법도 있습니다.
+
+</details>

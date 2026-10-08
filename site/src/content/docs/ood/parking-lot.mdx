@@ -1,0 +1,93 @@
+---
+title: 주차장 설계 (Design a parking lot)
+description: 오토바이·승용차·버스가 크기에 맞는 칸에 주차하는 여러 층짜리 주차장을 객체 지향으로 설계하고, 차량과 주차 칸의 책임을 나누는 법을 익힙니다.
+original: https://github.com/donnemartin/system-design-primer/blob/master/solutions/object_oriented_design/parking_lot/parking_lot.ipynb
+---
+import { Code } from '@astrojs/starlight/components';
+import source from '@repo/solutions/object_oriented_design/parking_lot/parking_lot.py?raw';
+
+:::note[이 문제에서 배우는 것]
+- 차량 종류를 추상 클래스 `Vehicle`의 하위 클래스로 나누고, "어느 칸에 들어갈 수 있는가"를 각 차량이 판단하게 하는 다형성
+- 주차장 → 층 → 주차 칸으로 이어지는 포함 관계와, 주차 요청을 아래 단계로 넘기는 책임 위임
+- 버스처럼 여러 칸을 연속으로 차지하는 차량을 모델링하는 방법
+- 차량과 주차 칸이 서로를 참조하는 양방향 관계
+:::
+
+## 제약 조건과 가정 (Constraints and assumptions)
+
+- 어떤 종류의 차량을 지원해야 하나요?
+  - 오토바이, 승용차, 버스
+- 차량 종류마다 차지하는 주차 칸 수가 다른가요?
+  - 네.
+  - 오토바이 칸 → 오토바이
+  - 소형(compact) 칸 → 오토바이, 승용차
+  - 대형(large) 칸 → 오토바이, 승용차
+  - 버스는 연속된 "대형" 칸 5개가 있으면 주차할 수 있습니다.
+- 주차장은 여러 층으로 되어 있나요?
+  - 네.
+
+## 설계 개요
+
+| 클래스 | 역할 | 핵심 속성·메서드 |
+|---|---|---|
+| `VehicleSize` (enum) | 차량과 칸의 크기 등급 | `MOTORCYCLE`, `COMPACT`, `LARGE` |
+| `Vehicle` (추상 클래스) | 모든 차량의 공통 부분. 자신이 차지한 칸 목록을 관리 | `vehicle_size`, `license_plate`, `spot_size`, `spots_taken`, `take_spot()`, `clear_spots()`, `can_fit_in_spot()`(추상) |
+| `Motorcycle` | 오토바이. 1칸을 쓰고 어느 칸에나 들어감 | `can_fit_in_spot()` → 항상 `True` |
+| `Car` | 승용차. 1칸을 쓰고 소형·대형 칸에 들어감 | `can_fit_in_spot()` |
+| `Bus` | 버스. 5칸을 쓰고 대형 칸에만 들어감 | `can_fit_in_spot()` |
+| `ParkingLot` | 주차장 전체. 층 목록을 갖고 주차 요청을 층에 넘김 | `num_levels`, `levels`, `park_vehicle()` |
+| `Level` | 주차장의 한 층. 그 층의 주차 칸을 관리 | `SPOTS_PER_ROW = 10`, `floor`, `num_spots`, `available_spots`, `spots`, `spot_freed()`, `park_vehicle()`, `_find_available_spot()`, `_park_starting_at_spot()` |
+| `ParkingSpot` | 주차 칸 하나 | `level`, `row`, `spot_number`, `spot_size`, `vehicle_size`, `vehicle`, `is_available()`, `can_fit_vehicle()`, `park_vehicle()`, `remove_vehicle()` |
+
+- **주차 요청의 위임**: `ParkingLot.park_vehicle()`은 층을 차례로 돌며 `Level.park_vehicle()`을 호출하고, 처음 성공한 층에서 `True`를 돌려줍니다. 모든 층이 실패하면 `False`입니다. `Level.park_vehicle()`은 `_find_available_spot()`으로 차량이 들어갈 칸을 찾아, 찾으면 `ParkingSpot.park_vehicle()`을 호출하고 그 칸을 돌려주며, 찾지 못하면 `None`을 돌려줍니다.
+- **들어갈 수 있는지 판단하기**: `ParkingSpot.can_fit_vehicle()`은 칸이 이미 차 있으면 `False`를 돌려주고, 비어 있으면 판단을 `vehicle.can_fit_in_spot(self)`에 맡깁니다. 칸은 "비어 있는가"만, 차량은 "내 크기에 맞는 칸인가"만 책임지므로, 차량 종류별 규칙이 `if` 분기로 흩어지지 않고 각 `Vehicle` 하위 클래스에 모입니다.
+- **여러 칸 차지하기**: 차량마다 필요한 칸 수는 `spot_size`(오토바이·승용차 1, 버스 5)로 정해지고, 차량은 차지한 칸을 `take_spot()`으로 `spots_taken`에 모아 둡니다. 떠날 때는 `clear_spots()`가 각 칸의 `remove_vehicle()`을 호출한 뒤 목록을 비웁니다. 줄당 칸 수를 뜻하는 `SPOTS_PER_ROW`와 `_park_starting_at_spot()`의 docstring("`spot.spot_number`부터 `vehicle.spot_size`만큼 차지")으로 보아, 버스는 같은 줄의 연속된 칸을 차지하도록 의도되어 있습니다.
+- **미구현 부분**: `Level._find_available_spot()`, `Level._park_starting_at_spot()`, `ParkingSpot.park_vehicle()`, `ParkingSpot.remove_vehicle()`은 원본 코드에서 구현되지 않은 채(`pass`) 남아 있습니다. `Level.spot_freed()`는 빈 칸 수(`available_spots`)를 늘리기만 하고, 주차할 때 이 값을 줄이는 코드는 없습니다.
+
+## 해설 코드
+
+<Code code={source} lang="py" title="parking_lot.py" />
+
+:::caution[코드를 읽을 때 주의할 점]
+- `Vehicle.__init__()`의 `self.spot_size` 줄에는 대입이 빠져 있어, 그대로 실행하면 `AttributeError`가 납니다. 노트북의 코드 셀처럼 `self.spot_size = spot_size`여야 합니다.
+- `Car`와 `Bus`의 `can_fit_in_spot()`은 `spot.size`를 보지만, `ParkingSpot`에는 `size` 속성이 없고 `spot_size`와 `vehicle_size`만 있습니다. 칸의 크기 등급을 어느 속성에 담을지 정리해야 합니다.
+- `Vehicle.clear_spots()`는 `spot.remove_vehicle(self)`처럼 차량을 인자로 넘기지만, `ParkingSpot.remove_vehicle()`은 인자를 받지 않으므로 그대로 호출하면 `TypeError`가 납니다.
+:::
+
+## 면접에서는
+
+- **제약 조건부터 확인하세요.** 지원할 차량 종류, 차량별로 들어갈 수 있는 칸, 여러 칸을 쓰는 차량이 있는지, 층이 여러 개인지를 묻습니다. 이 답이 그대로 클래스 계층(`Vehicle` 하위 클래스)과 포함 관계(주차장 → 층 → 칸)가 됩니다.
+- **핵심 객체는 명사에서 찾으세요.** 주차장, 층, 주차 칸, 차량입니다. 그다음 "누가 무엇을 판단하는가"를 정합니다. 이 코드에서는 크기 호환성은 차량이, 점유 여부는 칸이, 빈 칸 탐색은 층이 맡습니다.
+- **관계를 설명하세요.** 주차장은 층을, 층은 주차 칸을 가지며, 칸은 자신이 속한 층(`level`)과 주차된 차량(`vehicle`)을 참조합니다. 차량은 자신이 차지한 칸 목록(`spots_taken`)을 가지므로 둘은 양방향으로 연결됩니다.
+- **가장 까다로운 부분을 미리 준비하세요.** 버스가 연속된 대형 칸 5개를 차지하는 부분입니다. 줄(`row`) 안에서 연속으로 비어 있는 칸을 찾는 방법을 설명할 수 있어야 합니다.
+- **확장 포인트를 짚어 두세요.** 새 차량 종류, 층별 빈 칸 수 표시, 주차 요금 같은 요구가 들어왔을 때 어떤 클래스가 바뀌고 어떤 클래스는 그대로인지 말해 보세요.
+
+## 스스로 점검하기
+
+<details>
+<summary>`ParkingSpot.can_fit_vehicle()`이 판단을 다시 `vehicle.can_fit_in_spot()`에 맡기는 이유는 무엇인가요?</summary>
+
+칸은 자신이 비어 있는지를 알고, 차량은 자신이 어떤 크기의 칸에 들어가는지를 압니다. 각자 아는 것만 판단하게 하면, 칸 쪽에 차량 종류별 분기를 둘 필요가 없습니다. 새 차량 종류를 추가해도 `ParkingSpot`은 고치지 않고 `Vehicle` 하위 클래스만 추가하면 됩니다.
+
+</details>
+
+<details>
+<summary>버스는 어떤 과정으로 주차되나요?</summary>
+
+`Bus`는 `spot_size`가 5이고 대형 칸에만 들어갑니다. 층은 같은 줄에서 대형 칸 5개가 연속으로 비어 있는 시작 칸을 찾고(`_find_available_spot()`), 그 칸부터 5칸을 차지하게 합니다(`_park_starting_at_spot()`). 차지한 칸은 차량의 `spots_taken`에 기록됩니다. 두 메서드는 원본에서 비어 있으므로 직접 구현해 볼 부분입니다.
+
+</details>
+
+<details>
+<summary>차량이 주차장을 떠날 때는 어떤 일이 일어나야 하나요?</summary>
+
+`clear_spots()`가 `spots_taken`에 있는 각 칸의 `remove_vehicle()`을 호출해 칸을 비우고, 차량의 칸 목록을 초기화합니다. 층의 빈 칸 수도 다시 늘려야 하는데, 칸이 자신이 속한 층(`level`)을 참조하므로 칸을 비울 때 `spot_freed()`를 호출해 층에 알릴 수 있습니다.
+
+</details>
+
+<details>
+<summary>대형 칸 2개를 쓰는 트럭을 추가하려면 무엇을 바꿔야 하나요?</summary>
+
+`Vehicle`을 상속한 `Truck` 클래스를 만들고, 생성자에서 `VehicleSize.LARGE`와 `spot_size=2`를 넘기며, `can_fit_in_spot()`이 대형 칸에서만 `True`를 돌려주게 하면 됩니다. 연속 칸 탐색이 `vehicle.spot_size`를 기준으로 작성되어 있다면 `ParkingLot`, `Level`, `ParkingSpot`은 고칠 필요가 없습니다.
+
+</details>

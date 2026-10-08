@@ -1,0 +1,415 @@
+---
+/**
+ * Interactive version of "Availability in numbers": downtime budget for an availability target,
+ * and how two or more components combine in sequence vs in parallel.
+ * Uses a 365.25-day year and month = year / 12, which reproduces the upstream tables.
+ */
+const presets = ['99', '99.9', '99.95', '99.99', '99.999'];
+---
+
+<div class="sdp-avail not-content" data-sdp-avail>
+	<div class="panel">
+		<div class="panel-head">
+			<span class="sdp-eyebrow">계산기 1</span>
+			<h4>가용성 목표 → 허용 다운타임</h4>
+		</div>
+		<div class="controls">
+			<div class="presets" role="group" aria-label="자주 쓰는 가용성 값">
+				{
+					presets.map((value) => (
+						<button type="button" class="preset" data-preset={value} aria-pressed={value === '99.9' ? 'true' : 'false'}>
+							{value}%
+						</button>
+					))
+				}
+			</div>
+			<label class="field">
+				<span>직접 입력</span>
+				<span class="input-wrap">
+					<input type="number" min="0" max="99.99999" step="any" value="99.9" data-target inputmode="decimal" />
+					<span class="unit">%</span>
+				</span>
+			</label>
+		</div>
+		<dl class="downtime" aria-live="polite">
+			<div><dt>연간</dt><dd data-out="year"></dd></div>
+			<div><dt>월간</dt><dd data-out="month"></dd></div>
+			<div><dt>주간</dt><dd data-out="week"></dd></div>
+			<div><dt>일간</dt><dd data-out="day"></dd></div>
+		</dl>
+		<p class="nines" data-nines></p>
+	</div>
+
+	<div class="panel">
+		<div class="panel-head">
+			<span class="sdp-eyebrow">계산기 2</span>
+			<h4>구성 요소 조합: 직렬 vs 병렬</h4>
+		</div>
+		<div class="controls">
+			<label class="field">
+				<span>구성 요소 하나의 가용성</span>
+				<span class="input-wrap">
+					<input type="number" min="0" max="99.99999" step="any" value="99.9" data-component inputmode="decimal" />
+					<span class="unit">%</span>
+				</span>
+			</label>
+			<div class="field">
+				<span>구성 요소 개수</span>
+				<div class="presets" role="group" aria-label="구성 요소 개수">
+					{
+						[2, 3, 4, 5].map((n) => (
+							<button type="button" class="preset" data-count={n} aria-pressed={n === 2 ? 'true' : 'false'}>
+								{n}개
+							</button>
+						))
+					}
+				</div>
+			</div>
+		</div>
+		<div class="compare">
+			<div class="mode" data-mode="sequence">
+				<div class="diagram" aria-hidden="true" data-diagram="sequence"></div>
+				<p class="mode-name">직렬 (In sequence)</p>
+				<p class="formula" data-formula="sequence"></p>
+				<p class="result" data-result="sequence"></p>
+				<p class="sub" data-sub="sequence"></p>
+			</div>
+			<div class="mode" data-mode="parallel">
+				<div class="diagram" aria-hidden="true" data-diagram="parallel"></div>
+				<p class="mode-name">병렬 (In parallel)</p>
+				<p class="formula" data-formula="parallel"></p>
+				<p class="result" data-result="parallel"></p>
+				<p class="sub" data-sub="parallel"></p>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+	const YEAR = 365.25 * 24 * 3600;
+	const PERIODS = { year: YEAR, month: YEAR / 12, week: 7 * 24 * 3600, day: 24 * 3600 } as const;
+
+	function formatDuration(seconds: number): string {
+		if (seconds <= 0) return '0초';
+		if (seconds < 1) return `${(seconds * 1000).toFixed(seconds < 0.01 ? 2 : 0)}밀리초`;
+		const parts: string[] = [];
+		let rest = seconds;
+		const units: [number, string][] = [
+			[86400, '일'],
+			[3600, '시간'],
+			[60, '분'],
+		];
+		for (const [size, label] of units) {
+			const value = Math.floor(rest / size);
+			if (value > 0) {
+				parts.push(`${value}${label}`);
+				rest -= value * size;
+			}
+		}
+		const secs = Math.round(rest * 10) / 10;
+		if (secs > 0 || parts.length === 0) parts.push(`${Number.isInteger(secs) ? secs : secs.toFixed(1)}초`);
+		return parts.slice(0, 3).join(' ');
+	}
+
+	function formatPercent(fraction: number): string {
+		const pct = fraction * 100;
+		const text = pct.toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
+		return `${text}%`;
+	}
+
+	function clampAvailability(value: number): number | null {
+		if (!Number.isFinite(value) || value <= 0 || value >= 100) return null;
+		return value / 100;
+	}
+
+	function countNines(fraction: number): string {
+		const nines = -Math.log10(1 - fraction);
+		return Number.isInteger(Math.round(nines * 1000) / 1000) && Math.abs(nines - Math.round(nines)) < 1e-9
+			? `9가 ${Math.round(nines)}개`
+			: `약 ${nines.toFixed(1)}개의 9`;
+	}
+
+	for (const root of document.querySelectorAll<HTMLElement>('[data-sdp-avail]')) {
+		const target = root.querySelector<HTMLInputElement>('[data-target]')!;
+		const component = root.querySelector<HTMLInputElement>('[data-component]')!;
+		const targetPresets = [...root.querySelectorAll<HTMLButtonElement>('[data-preset]')];
+		const countButtons = [...root.querySelectorAll<HTMLButtonElement>('[data-count]')];
+		let count = 2;
+
+		const out = (name: string) => root.querySelector<HTMLElement>(`[data-out="${name}"]`)!;
+
+		function renderTarget() {
+			const a = clampAvailability(Number(target.value));
+			for (const button of targetPresets) {
+				button.setAttribute('aria-pressed', String(button.dataset.preset === target.value));
+			}
+			for (const [name, seconds] of Object.entries(PERIODS)) {
+				out(name).textContent = a === null ? '—' : formatDuration((1 - a) * seconds);
+			}
+			root.querySelector('[data-nines]')!.textContent =
+				a === null ? '0보다 크고 100보다 작은 값을 입력하세요.' : `${formatPercent(a)} = ${countNines(a)} (nines)`;
+		}
+
+		function renderDiagram(mode: 'sequence' | 'parallel') {
+			const box = root.querySelector<HTMLElement>(`[data-diagram="${mode}"]`)!;
+			const items = Array.from({ length: count }, (_, i) => `<span class="node">${String.fromCharCode(65 + i)}</span>`);
+			box.innerHTML = mode === 'sequence' ? items.join('<span class="arrow">→</span>') : `<span class="stack">${items.join('')}</span>`;
+		}
+
+		function renderCombination() {
+			const a = clampAvailability(Number(component.value));
+			for (const button of countButtons) button.setAttribute('aria-pressed', String(Number(button.dataset.count) === count));
+			const sequence = a === null ? null : Math.pow(a, count);
+			const parallel = a === null ? null : 1 - Math.pow(1 - a, count);
+			const shown = a === null ? '?' : formatPercent(a);
+			const set = (selector: string, text: string) => (root.querySelector(selector)!.textContent = text);
+			set('[data-formula="sequence"]', `${Array(count).fill(shown).join(' × ')}`);
+			set('[data-formula="parallel"]', `1 − (1 − ${shown})^${count}`);
+			set('[data-result="sequence"]', sequence === null ? '—' : formatPercent(sequence));
+			set('[data-result="parallel"]', parallel === null ? '—' : formatPercent(parallel));
+			set('[data-sub="sequence"]', sequence === null ? '' : `연간 다운타임 ${formatDuration((1 - sequence) * YEAR)}`);
+			set('[data-sub="parallel"]', parallel === null ? '' : `연간 다운타임 ${formatDuration((1 - parallel) * YEAR)}`);
+			renderDiagram('sequence');
+			renderDiagram('parallel');
+		}
+
+		for (const button of targetPresets) {
+			button.addEventListener('click', () => {
+				target.value = button.dataset.preset!;
+				renderTarget();
+			});
+		}
+		for (const button of countButtons) {
+			button.addEventListener('click', () => {
+				count = Number(button.dataset.count);
+				renderCombination();
+			});
+		}
+		target.addEventListener('input', renderTarget);
+		component.addEventListener('input', renderCombination);
+		renderTarget();
+		renderCombination();
+	}
+</script>
+
+<style>
+	.sdp-avail {
+		display: grid;
+		gap: 1rem;
+		margin-block: 1.5rem;
+	}
+
+	.panel {
+		display: grid;
+		gap: 1rem;
+		padding: 1.15rem;
+		border: 1px solid var(--sdp-border);
+		border-radius: var(--sdp-radius);
+		background: var(--sdp-surface);
+		box-shadow: var(--sdp-shadow);
+	}
+
+	.panel-head {
+		display: grid;
+		gap: 0.15rem;
+	}
+
+	h4 {
+		margin: 0;
+		font-size: 1.05rem;
+		font-weight: 750;
+		color: var(--sl-color-white);
+	}
+
+	.controls {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: flex-end;
+		gap: 0.9rem 1.25rem;
+	}
+
+	.presets {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+	}
+
+	.preset {
+		padding: 0.35rem 0.7rem;
+		border-radius: 8px;
+		border: 1px solid var(--sdp-border);
+		background: var(--sdp-surface-2);
+		color: var(--sl-color-gray-2);
+		font: inherit;
+		font-size: var(--sl-text-sm);
+		font-weight: 650;
+		font-variant-numeric: tabular-nums;
+		cursor: pointer;
+	}
+
+	.preset:hover {
+		border-color: var(--sl-color-accent);
+	}
+
+	.preset[aria-pressed='true'] {
+		background: var(--sl-color-accent);
+		border-color: var(--sl-color-accent);
+		color: #fff;
+	}
+
+	.field {
+		display: grid;
+		gap: 0.3rem;
+		font-size: var(--sl-text-xs);
+		color: var(--sdp-muted);
+	}
+
+	.input-wrap {
+		display: inline-flex;
+		align-items: center;
+		border: 1px solid var(--sdp-border);
+		border-radius: 8px;
+		background: var(--sl-color-black);
+		overflow: hidden;
+	}
+
+	.input-wrap:focus-within {
+		border-color: var(--sl-color-accent);
+	}
+
+	input {
+		width: 8.5rem;
+		padding: 0.4rem 0.6rem;
+		border: 0;
+		background: transparent;
+		color: var(--sl-color-white);
+		font: inherit;
+		font-size: var(--sl-text-base);
+		font-weight: 650;
+		font-variant-numeric: tabular-nums;
+		outline: none;
+	}
+
+	.unit {
+		padding-inline: 0.6rem;
+		color: var(--sdp-muted);
+	}
+
+	.downtime {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+		gap: 0.5rem;
+		margin: 0;
+	}
+
+	.downtime div {
+		padding: 0.7rem 0.85rem;
+		border-radius: 10px;
+		background: var(--sdp-surface-2);
+		border: 1px solid var(--sdp-border);
+	}
+
+	.downtime dt {
+		font-size: var(--sl-text-2xs);
+		color: var(--sdp-muted);
+	}
+
+	.downtime dd {
+		margin: 0.1rem 0 0;
+		font-weight: 750;
+		color: var(--sl-color-white);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.nines {
+		margin: 0;
+		font-size: var(--sl-text-xs);
+		color: var(--sdp-muted);
+	}
+
+	.compare {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+		gap: 0.6rem;
+	}
+
+	.mode {
+		display: grid;
+		gap: 0.3rem;
+		padding: 0.9rem;
+		border-radius: 12px;
+		border: 1px solid var(--sdp-border);
+		background: var(--sdp-surface-2);
+	}
+
+	.mode[data-mode='sequence'] {
+		--tone: var(--sl-color-orange);
+	}
+
+	.mode[data-mode='parallel'] {
+		--tone: var(--sdp-success);
+	}
+
+	.mode p {
+		margin: 0;
+	}
+
+	.mode-name {
+		font-size: var(--sl-text-xs);
+		font-weight: 700;
+		color: var(--sdp-muted);
+	}
+
+	.formula {
+		font-family: var(--__sl-font-mono);
+		font-size: var(--sl-text-2xs);
+		color: var(--sdp-muted);
+		overflow-wrap: anywhere;
+	}
+
+	.result {
+		font-size: 1.5rem;
+		font-weight: 800;
+		letter-spacing: -0.02em;
+		color: var(--tone);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.sub {
+		font-size: var(--sl-text-xs);
+		color: var(--sl-color-gray-2);
+	}
+
+	.diagram {
+		display: flex;
+		align-items: center;
+		min-height: 2.6rem;
+		margin-bottom: 0.25rem;
+	}
+
+	.diagram :global(.node) {
+		display: grid;
+		place-items: center;
+		width: 1.7rem;
+		height: 1.7rem;
+		border-radius: 7px;
+		font-size: var(--sl-text-2xs);
+		font-weight: 800;
+		color: var(--tone);
+		border: 1.5px solid var(--tone);
+		background: color-mix(in srgb, var(--tone) 10%, transparent);
+	}
+
+	.diagram :global(.arrow) {
+		padding-inline: 0.25rem;
+		color: var(--sdp-muted);
+		font-size: var(--sl-text-xs);
+	}
+
+	.diagram :global(.stack) {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem;
+		max-width: 6rem;
+	}
+</style>

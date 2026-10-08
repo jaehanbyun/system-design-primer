@@ -1,0 +1,200 @@
+---
+import Default from '@astrojs/starlight/components/Hero.astro';
+import { getCollection } from 'astro:content';
+import ArchitectureDiagram from '../ArchitectureDiagram.astro';
+import { flashcards } from '~/data/flashcards';
+import { href } from '~/utils/site';
+
+const { entry, id } = Astro.locals.starlightRoute;
+const isHome = id === '' || id === 'index';
+const { title = entry.data.title, tagline } = entry.data.hero ?? {};
+
+let stats: { value: number; label: string; link: string }[] = [];
+if (isHome) {
+	const docs = await getCollection('docs');
+	const count = (prefix: string) => docs.filter((doc) => doc.id.startsWith(prefix)).length;
+	stats = [
+		{ value: count('topics/'), label: '핵심 주제', link: 'topics' },
+		{ value: count('system-design/'), label: '시스템 설계 문제', link: 'system-design' },
+		{ value: count('ood/'), label: '객체 지향 설계', link: 'ood' },
+		{ value: flashcards.length, label: '플래시카드', link: 'practice/flashcards' },
+	];
+}
+---
+
+{
+	isHome ? (
+		<section class="sdp-hero">
+			<div class="copy">
+				<p class="sdp-eyebrow">The System Design Primer · 한국어 학습판</p>
+				<h1 id="_top" data-page-title set:html={title} />
+				{tagline && <p class="tagline" set:html={tagline} />}
+				<div class="actions">
+					<a class="sdp-button" data-variant="primary" href={href('guide')}>
+						학습 플랜 고르기
+						<svg viewBox="0 0 16 16" aria-hidden="true">
+							<path
+								d="M3 8h10M9 4l4 4-4 4"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="1.8"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+						</svg>
+					</a>
+					<a class="sdp-button" href={href('topics')}>
+						주제 지도 보기
+					</a>
+					<a class="sdp-button ghost" href={href('interview/approach')}>
+						면접 접근법
+					</a>
+				</div>
+				<dl class="stats">
+					{stats.map((stat) => (
+						<a class="stat" href={href(stat.link)}>
+							<dt>{stat.label}</dt>
+							<dd>{stat.value}</dd>
+						</a>
+					))}
+				</dl>
+			</div>
+			<div class="art">
+				<ArchitectureDiagram />
+			</div>
+		</section>
+	) : (
+		<Default />
+	)
+}
+
+<style>
+	.sdp-hero {
+		display: grid;
+		grid-template-columns: 100%;
+		gap: 2.5rem;
+		align-items: center;
+		padding-block: 2rem 1rem;
+	}
+
+	.copy {
+		display: flex;
+		flex-direction: column;
+		gap: 1.1rem;
+		word-break: keep-all;
+	}
+
+	h1 {
+		margin: 0;
+		font-size: clamp(2.1rem, 1.3rem + 3.4vw, 3.6rem);
+		line-height: 1.16;
+		font-weight: 800;
+		letter-spacing: -0.035em;
+		color: var(--sl-color-white);
+	}
+
+	h1 :global(em) {
+		font-style: normal;
+		background: linear-gradient(100deg, var(--sl-color-accent) 10%, var(--sdp-long) 90%);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+
+	.tagline {
+		margin: 0;
+		max-width: 34rem;
+		font-size: clamp(1rem, 0.95rem + 0.3vw, 1.15rem);
+		line-height: 1.75;
+		color: var(--sl-color-gray-2);
+	}
+
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.6rem;
+		margin-top: 0.4rem;
+	}
+
+	.actions .sdp-button {
+		padding: 0.7rem 1.15rem;
+		font-size: var(--sl-text-base);
+	}
+
+	.actions svg {
+		width: 1rem;
+		height: 1rem;
+	}
+
+	.ghost {
+		display: none;
+		background: transparent;
+		border-color: transparent;
+		color: var(--sl-color-gray-2);
+	}
+
+	@media (min-width: 30rem) {
+		.ghost {
+			display: inline-flex;
+		}
+	}
+
+	.stats {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.6rem;
+		margin: 1rem 0 0;
+		max-width: 34rem;
+	}
+
+	.stat {
+		display: flex;
+		flex-direction: column-reverse;
+		gap: 0.1rem;
+		padding: 0.7rem 0.9rem;
+		border-radius: 12px;
+		border: 1px solid var(--sdp-border);
+		background: color-mix(in srgb, var(--sdp-surface) 80%, transparent);
+		text-decoration: none;
+		transition: border-color 0.15s ease;
+	}
+
+	.stat:hover {
+		border-color: var(--sl-color-accent);
+	}
+
+	.stat dt {
+		font-size: var(--sl-text-xs);
+		color: var(--sdp-muted);
+	}
+
+	.stat dd {
+		margin: 0;
+		font-size: 1.6rem;
+		font-weight: 800;
+		letter-spacing: -0.03em;
+		line-height: 1.1;
+		color: var(--sl-color-white);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.art {
+		max-width: 30rem;
+		width: 100%;
+		margin-inline: auto;
+	}
+
+	@media (min-width: 40rem) {
+		.stats {
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+		}
+	}
+
+	@media (min-width: 64rem) {
+		.sdp-hero {
+			grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+			gap: 3rem;
+			padding-block: 3.5rem 2rem;
+		}
+	}
+</style>

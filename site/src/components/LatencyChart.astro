@@ -1,0 +1,311 @@
+---
+/**
+ * "Latency numbers every programmer should know" on a log scale, with a toggle that
+ * stretches 1 ns to 1 s so the gaps become intuitive.
+ */
+type Group = 'memory' | 'storage' | 'network';
+
+const rows: { label: string; en: string; ns: number; group: Group; note?: string }[] = [
+	{ label: 'L1 캐시 참조', en: 'L1 cache reference', ns: 0.5, group: 'memory' },
+	{ label: '분기 예측 실패', en: 'Branch mispredict', ns: 5, group: 'memory' },
+	{ label: 'L2 캐시 참조', en: 'L2 cache reference', ns: 7, group: 'memory', note: 'L1 캐시의 14배' },
+	{ label: '뮤텍스 잠금/해제', en: 'Mutex lock/unlock', ns: 25, group: 'memory' },
+	{ label: '메인 메모리 참조', en: 'Main memory reference', ns: 100, group: 'memory', note: 'L2의 20배, L1의 200배' },
+	{ label: 'Zippy로 1KB 압축', en: 'Compress 1K bytes with Zippy', ns: 10_000, group: 'memory' },
+	{ label: '1Gbps 네트워크로 1KB 전송', en: 'Send 1 KB bytes over 1 Gbps network', ns: 10_000, group: 'network' },
+	{ label: 'SSD에서 4KB 임의 읽기', en: 'Read 4 KB randomly from SSD*', ns: 150_000, group: 'storage', note: '~1GB/s SSD' },
+	{ label: '메모리에서 1MB 순차 읽기', en: 'Read 1 MB sequentially from memory', ns: 250_000, group: 'memory' },
+	{ label: '같은 데이터 센터 안 왕복', en: 'Round trip within same datacenter', ns: 500_000, group: 'network' },
+	{
+		label: 'SSD에서 1MB 순차 읽기',
+		en: 'Read 1 MB sequentially from SSD*',
+		ns: 1_000_000,
+		group: 'storage',
+		note: '~1GB/s SSD, 메모리의 4배',
+	},
+	{ label: 'HDD 탐색(seek)', en: 'HDD seek', ns: 10_000_000, group: 'storage', note: '데이터 센터 왕복의 20배' },
+	{
+		label: '1Gbps 네트워크에서 1MB 순차 읽기',
+		en: 'Read 1 MB sequentially from 1 Gbps',
+		ns: 10_000_000,
+		group: 'network',
+		note: '메모리의 40배, SSD의 10배',
+	},
+	{
+		label: 'HDD에서 1MB 순차 읽기',
+		en: 'Read 1 MB sequentially from HDD',
+		ns: 30_000_000,
+		group: 'storage',
+		note: '메모리의 120배, SSD의 30배',
+	},
+	{ label: '패킷 왕복 CA → 네덜란드 → CA', en: 'Send packet CA->Netherlands->CA', ns: 150_000_000, group: 'network' },
+];
+
+const groups: Record<Group, string> = { memory: 'CPU·메모리', storage: '저장 장치', network: '네트워크' };
+
+const min = Math.log10(0.5);
+const max = Math.log10(150_000_000);
+const width = (ns: number) => 3 + (97 * (Math.log10(ns) - min)) / (max - min);
+
+function realTime(ns: number): string {
+	if (ns < 1000) return `${ns} ns`;
+	if (ns < 1_000_000) return `${(ns / 1000).toLocaleString('en-US')} µs`;
+	return `${(ns / 1_000_000).toLocaleString('en-US')} ms`;
+}
+
+// 1 ns → 1 s
+function humanTime(ns: number): string {
+	const s = ns;
+	if (s < 60) return `${s}초`;
+	if (s < 3600) {
+		const m = Math.floor(s / 60);
+		const r = Math.round(s % 60);
+		return r ? `${m}분 ${r}초` : `${m}분`;
+	}
+	if (s < 86400) return `약 ${(s / 3600).toFixed(1)}시간`;
+	if (s < 86400 * 60) return `약 ${(s / 86400).toFixed(1)}일`;
+	if (s < 86400 * 365.25) return `약 ${(s / (86400 * 30.44)).toFixed(1)}개월`;
+	return `약 ${(s / (86400 * 365.25)).toFixed(1)}년`;
+}
+---
+
+<div class="sdp-latency not-content" data-sdp-latency data-mode="real">
+	<div class="toolbar">
+		<div class="legend">
+			{
+				Object.entries(groups).map(([key, label]) => (
+					<span class="legend-item" data-group={key}>
+						<i />
+						{label}
+					</span>
+				))
+			}
+		</div>
+		<div class="toggle" role="group" aria-label="표시 단위">
+			<button type="button" data-set-mode="real" aria-pressed="true">실제 시간</button>
+			<button type="button" data-set-mode="human" aria-pressed="false">1ns를 1초로 늘리면</button>
+		</div>
+	</div>
+	<ol class="rows">
+		{
+			rows.map((row) => (
+				<li data-group={row.group}>
+					<div class="label">
+						<span class="ko">{row.label}</span>
+						<span class="en">{row.en}</span>
+					</div>
+					<div class="bar-cell">
+						<span class="bar" style={`--w:${width(row.ns).toFixed(2)}%`} />
+						{row.note && <span class="note">{row.note}</span>}
+					</div>
+					<div class="value">
+						<span class="real">{realTime(row.ns)}</span>
+						<span class="human">{humanTime(row.ns)}</span>
+					</div>
+				</li>
+			))
+		}
+	</ol>
+	<p class="caption">
+		막대 길이는 로그 스케일입니다. 막대가 같은 길이만큼 길어질 때마다 시간은 같은 배수(예: 10배)로 늘어납니다. *SSD
+		수치는 약 1GB/s SSD 기준입니다.
+	</p>
+</div>
+
+<script>
+	for (const root of document.querySelectorAll<HTMLElement>('[data-sdp-latency]')) {
+		const buttons = [...root.querySelectorAll<HTMLButtonElement>('[data-set-mode]')];
+		for (const button of buttons) {
+			button.addEventListener('click', () => {
+				root.dataset.mode = button.dataset.setMode;
+				for (const other of buttons) other.setAttribute('aria-pressed', String(other === button));
+			});
+		}
+	}
+</script>
+
+<style>
+	.sdp-latency {
+		margin-block: 1.5rem;
+		padding: 1.1rem 1.15rem 0.9rem;
+		border: 1px solid var(--sdp-border);
+		border-radius: var(--sdp-radius);
+		background: var(--sdp-surface);
+		box-shadow: var(--sdp-shadow);
+	}
+
+	.toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		align-items: center;
+		gap: 0.75rem;
+		margin-bottom: 0.9rem;
+	}
+
+	.legend {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.9rem;
+		font-size: var(--sl-text-xs);
+		color: var(--sdp-muted);
+	}
+
+	.legend-item {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	.legend-item i {
+		width: 0.7rem;
+		height: 0.7rem;
+		border-radius: 3px;
+		background: var(--tone);
+	}
+
+	[data-group='memory'] {
+		--tone: var(--sdp-medium);
+	}
+
+	[data-group='storage'] {
+		--tone: var(--sdp-short);
+	}
+
+	[data-group='network'] {
+		--tone: var(--sdp-long);
+	}
+
+	.toggle {
+		display: inline-flex;
+		padding: 0.2rem;
+		border-radius: 10px;
+		background: var(--sdp-surface-2);
+		border: 1px solid var(--sdp-border);
+	}
+
+	.toggle button {
+		padding: 0.3rem 0.7rem;
+		border: 0;
+		border-radius: 7px;
+		background: transparent;
+		color: var(--sdp-muted);
+		font: inherit;
+		font-size: var(--sl-text-xs);
+		font-weight: 650;
+		cursor: pointer;
+	}
+
+	.toggle button[aria-pressed='true'] {
+		background: var(--sl-color-accent);
+		color: #fff;
+	}
+
+	.rows {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.15rem;
+	}
+
+	li {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		grid-template-areas:
+			'label value'
+			'bar bar';
+		gap: 0.25rem 0.75rem;
+		padding: 0.5rem 0.25rem;
+		border-bottom: 1px dashed var(--sdp-border);
+	}
+
+	li:last-child {
+		border-bottom: 0;
+	}
+
+	.label {
+		grid-area: label;
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.ko {
+		font-size: var(--sl-text-sm);
+		font-weight: 650;
+		color: var(--sl-color-white);
+		word-break: keep-all;
+	}
+
+	.en {
+		font-size: var(--sl-text-2xs);
+		color: var(--sdp-muted);
+	}
+
+	.bar-cell {
+		grid-area: bar;
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: 0.9rem;
+		min-width: 0;
+		overflow: hidden;
+	}
+
+	.bar {
+		display: block;
+		height: 0.55rem;
+		width: var(--w);
+		border-radius: 999px;
+		background: linear-gradient(90deg, color-mix(in srgb, var(--tone) 55%, transparent), var(--tone));
+		flex: none;
+	}
+
+	.note {
+		min-width: 0;
+		font-size: var(--sl-text-2xs);
+		color: var(--sdp-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.value {
+		grid-area: value;
+		text-align: end;
+		font-weight: 750;
+		font-variant-numeric: tabular-nums;
+		color: var(--tone);
+		white-space: nowrap;
+		align-self: center;
+	}
+
+	.human {
+		display: none;
+	}
+
+	[data-mode='human'] .human {
+		display: inline;
+	}
+
+	[data-mode='human'] .real {
+		display: none;
+	}
+
+	.caption {
+		margin: 0.75rem 0 0;
+		font-size: var(--sl-text-2xs);
+		color: var(--sdp-muted);
+		word-break: keep-all;
+	}
+
+	@media (min-width: 46rem) {
+		li {
+			grid-template-columns: 15rem minmax(0, 1fr) 7rem;
+			grid-template-areas: 'label bar value';
+			align-items: center;
+		}
+	}
+</style>

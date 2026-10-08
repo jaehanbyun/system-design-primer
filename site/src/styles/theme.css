@@ -1,0 +1,491 @@
+/*
+ * "Blueprint" theme: navy paper in dark mode, drafting-blue accents, and Pretendard for
+ * Korean text. Plan colours (short / medium / long) are used consistently across badges,
+ * cards and progress bars.
+ */
+
+:root {
+	--sl-font: 'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, 'Apple SD Gothic Neo',
+		'Noto Sans KR', 'Malgun Gothic', sans-serif;
+	--sl-font-mono: 'JetBrains Mono', 'D2Coding', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	--sl-line-height: 1.8;
+	--sl-content-width: 48rem;
+	--sl-text-h1: clamp(1.9rem, 1.4rem + 1.6vw, 2.4rem);
+	--sl-text-h2: 1.6rem;
+	--sl-text-h3: 1.28rem;
+	--sl-text-h4: 1.1rem;
+
+	/* Dark (default) */
+	--sl-color-accent-low: #15234d;
+	--sl-color-accent: #5b85ff;
+	--sl-color-accent-high: #c4d4ff;
+	--sl-color-white: #ffffff;
+	--sl-color-gray-1: #e9eef8;
+	--sl-color-gray-2: #c3cbdc;
+	--sl-color-gray-3: #8c97ae;
+	--sl-color-gray-4: #576279;
+	--sl-color-gray-5: #313b52;
+	--sl-color-gray-6: #18203a;
+	--sl-color-black: #0c1122;
+	--sl-color-bg-nav: #0f1529;
+	--sl-color-bg-sidebar: #0f1529;
+
+	--sdp-radius: 14px;
+	--sdp-radius-sm: 9px;
+	--sdp-grid-line: rgba(110, 145, 255, 0.075);
+	--sdp-surface: #121a31;
+	--sdp-surface-2: #172040;
+	--sdp-border: #253050;
+	--sdp-muted: var(--sl-color-gray-3);
+	--sdp-success: #3ecf8e;
+	--sdp-success-bg: rgba(62, 207, 142, 0.12);
+	--sdp-short: #2fc6b0;
+	--sdp-medium: #6b8dff;
+	--sdp-long: #b18cff;
+	--sdp-short-bg: rgba(47, 198, 176, 0.13);
+	--sdp-medium-bg: rgba(107, 141, 255, 0.15);
+	--sdp-long-bg: rgba(177, 140, 255, 0.15);
+	--sdp-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset, 0 12px 32px -18px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme='light'] {
+	--sl-color-accent-low: #dfe7ff;
+	--sl-color-accent: #2c56e0;
+	--sl-color-accent-high: #172f80;
+	--sl-color-white: #0e1630;
+	--sl-color-gray-1: #1d2742;
+	--sl-color-gray-2: #343f5b;
+	--sl-color-gray-3: #56607a;
+	--sl-color-gray-4: #8b94aa;
+	--sl-color-gray-5: #ccd3e1;
+	--sl-color-gray-6: #edf1f8;
+	--sl-color-gray-7: #f6f8fc;
+	--sl-color-black: #ffffff;
+	--sl-color-bg-nav: #ffffff;
+	--sl-color-bg-sidebar: #fafbfe;
+
+	--sdp-grid-line: rgba(44, 86, 224, 0.065);
+	--sdp-surface: #ffffff;
+	--sdp-surface-2: #f4f7fd;
+	--sdp-border: #dde3ef;
+	--sdp-success: #138a57;
+	--sdp-success-bg: rgba(19, 138, 87, 0.1);
+	--sdp-short: #0e8f7d;
+	--sdp-medium: #2c56e0;
+	--sdp-long: #7446d6;
+	--sdp-short-bg: rgba(14, 143, 125, 0.1);
+	--sdp-medium-bg: rgba(44, 86, 224, 0.09);
+	--sdp-long-bg: rgba(116, 70, 214, 0.1);
+	--sdp-shadow: 0 1px 2px rgba(16, 24, 48, 0.05), 0 12px 28px -20px rgba(16, 24, 48, 0.35);
+}
+
+/* ---------- Typography ---------- */
+
+body {
+	font-feature-settings: 'ss06' on;
+	text-rendering: optimizeLegibility;
+}
+
+.sl-markdown-content,
+.sdp-prose {
+	word-break: keep-all;
+	overflow-wrap: anywhere;
+}
+
+.sl-markdown-content :is(h1, h2, h3, h4, h5),
+h1#_top {
+	letter-spacing: -0.02em;
+	word-break: keep-all;
+}
+
+.sl-markdown-content h2 {
+	padding-top: 0.25rem;
+}
+
+.sl-markdown-content :is(strong, b):not(:where(.not-content *)) {
+	color: var(--sl-color-white);
+	font-weight: 650;
+}
+
+.sl-markdown-content code:not(pre code):not(:where(.not-content *)) {
+	border-radius: 5px;
+	padding: 0.1em 0.38em;
+	font-size: 0.88em;
+	word-break: break-word;
+}
+
+/* ---------- Header & sidebar ---------- */
+
+.site-title {
+	gap: 0.6rem;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+}
+
+.site-title img {
+	height: 1.9rem;
+	width: auto;
+}
+
+.sidebar-content {
+	--sl-sidebar-item-padding-inline: 0.6rem;
+}
+
+.sidebar-content .group-label .large {
+	font-size: var(--sl-text-sm);
+	font-weight: 700;
+	letter-spacing: 0.01em;
+	color: var(--sl-color-white);
+}
+
+.sidebar-content a {
+	border-radius: 8px;
+}
+
+.sidebar-content a[aria-current='page'] {
+	background: var(--sl-color-accent-low);
+	color: var(--sl-color-accent-high);
+	font-weight: 600;
+}
+
+:root[data-theme='light'] .sidebar-content a[aria-current='page'] {
+	color: var(--sl-color-accent);
+}
+
+/* Progress checkmarks injected by the footer script. */
+.sidebar-content a[data-sdp-done] {
+	position: relative;
+	padding-inline-end: 1.9rem;
+}
+
+.sidebar-content a[data-sdp-done]::after {
+	content: '';
+	position: absolute;
+	inset-inline-end: 0.6rem;
+	top: 50%;
+	width: 0.95rem;
+	height: 0.95rem;
+	translate: 0 -50%;
+	border-radius: 999px;
+	background: var(--sdp-success)
+		url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8.5l2.6 2.5L12 5.5'/%3E%3C/svg%3E")
+		center / 80% no-repeat;
+}
+
+/* ---------- Content images (diagrams are mostly PNGs on white) ---------- */
+
+.sl-markdown-content img:not(:where(.not-content *)) {
+	display: block;
+	margin-inline: auto;
+	max-height: 34rem;
+	width: auto;
+	border-radius: var(--sdp-radius-sm);
+	border: 1px solid var(--sdp-border);
+	background: #fff;
+	padding: 0.6rem;
+	box-shadow: var(--sdp-shadow);
+}
+
+.sl-markdown-content p:has(> img:only-child),
+.sl-markdown-content p:has(> starlight-image-zoom-zoomable:only-child) {
+	margin-block: 1.75rem 0.5rem;
+}
+
+/* Source caption right after an image: `*출처: …*` */
+.sl-markdown-content p:has(> img:only-child) + p:has(> em:only-child),
+.sl-markdown-content p:has(> starlight-image-zoom-zoomable:only-child) + p:has(> em:only-child) {
+	margin-top: 0.4rem;
+	text-align: center;
+	font-size: var(--sl-text-xs);
+	color: var(--sdp-muted);
+}
+
+.sl-markdown-content p:has(> img:only-child) + p:has(> em:only-child) a,
+.sl-markdown-content p:has(> starlight-image-zoom-zoomable:only-child) + p:has(> em:only-child) a {
+	color: inherit;
+}
+
+/* ---------- Tables ---------- */
+
+.sl-markdown-content table:not(:where(.not-content *)) {
+	font-size: var(--sl-text-sm);
+	line-height: 1.6;
+	border-collapse: separate;
+	border-spacing: 0;
+	border: 1px solid var(--sdp-border);
+	border-radius: var(--sdp-radius-sm);
+	overflow: hidden;
+}
+
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+	border: 0;
+	border-bottom: 1px solid var(--sdp-border);
+	padding: 0.6rem 0.85rem;
+	vertical-align: top;
+}
+
+.sl-markdown-content tr:last-child td:not(:where(.not-content *)) {
+	border-bottom: 0;
+}
+
+.sl-markdown-content td code:not(:where(.not-content *)) {
+	white-space: nowrap;
+}
+
+.sl-markdown-content th:not(:where(.not-content *)) {
+	background: var(--sdp-surface-2);
+	color: var(--sl-color-white);
+	font-weight: 650;
+	white-space: nowrap;
+}
+
+.sl-markdown-content tbody tr:hover td:not(:where(.not-content *)) {
+	background: color-mix(in srgb, var(--sl-color-accent) 5%, transparent);
+}
+
+/* ---------- Asides ---------- */
+
+.starlight-aside {
+	border-radius: var(--sdp-radius-sm);
+	border-inline-start-width: 4px;
+}
+
+:root[data-theme='light'] .starlight-aside--note {
+	background-color: #eef2ff;
+}
+
+:root[data-theme='light'] .starlight-aside--tip {
+	background-color: #f6f0ff;
+}
+
+:root[data-theme='light'] .starlight-aside--caution {
+	background-color: #fff6e5;
+}
+
+:root[data-theme='light'] .starlight-aside--danger {
+	background-color: #fff0f3;
+}
+
+.starlight-aside__title {
+	font-weight: 700;
+	letter-spacing: -0.01em;
+}
+
+/* ---------- Self-check questions (<details>) ---------- */
+
+.sl-markdown-content details:not(:where(.not-content *)) {
+	border: 1px solid var(--sdp-border);
+	border-radius: var(--sdp-radius-sm);
+	background: var(--sdp-surface);
+	padding: 0;
+	margin-block: 0.6rem;
+	overflow: hidden;
+	transition: border-color 0.15s ease;
+}
+
+.sl-markdown-content details + details {
+	margin-top: 0.6rem;
+}
+
+.sl-markdown-content details[open] {
+	border-color: color-mix(in srgb, var(--sl-color-accent) 45%, var(--sdp-border));
+}
+
+.sl-markdown-content details > summary {
+	list-style: none;
+	cursor: pointer;
+	padding: 0.8rem 1rem 0.8rem 2.6rem;
+	position: relative;
+	font-weight: 600;
+	color: var(--sl-color-white);
+	line-height: 1.55;
+}
+
+.sl-markdown-content details > summary::-webkit-details-marker {
+	display: none;
+}
+
+.sl-markdown-content details > summary::before {
+	content: 'Q';
+	position: absolute;
+	inset-inline-start: 0.85rem;
+	top: 0.82rem;
+	display: grid;
+	place-items: center;
+	width: 1.25rem;
+	height: 1.25rem;
+	border-radius: 6px;
+	font-size: 0.72rem;
+	font-weight: 800;
+	background: var(--sl-color-accent-low);
+	color: var(--sl-color-accent-high);
+}
+
+:root[data-theme='light'] .sl-markdown-content details > summary::before {
+	color: var(--sl-color-accent);
+}
+
+.sl-markdown-content details > summary::after {
+	content: '답 보기';
+	float: inline-end;
+	margin-inline-start: 1rem;
+	font-size: var(--sl-text-xs);
+	font-weight: 500;
+	color: var(--sdp-muted);
+}
+
+.sl-markdown-content details[open] > summary::after {
+	content: '접기';
+}
+
+.sl-markdown-content details > :not(summary) {
+	margin-inline: 1rem;
+}
+
+.sl-markdown-content details > :not(summary):last-child {
+	margin-bottom: 0.9rem;
+}
+
+.sl-markdown-content details[open] > summary {
+	border-bottom: 1px dashed var(--sdp-border);
+	margin-bottom: 0.75rem;
+}
+
+/* ---------- Shared component primitives ---------- */
+
+.sdp-card {
+	background: var(--sdp-surface);
+	border: 1px solid var(--sdp-border);
+	border-radius: var(--sdp-radius);
+	box-shadow: var(--sdp-shadow);
+}
+
+.sdp-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	padding: 0.1rem 0.55rem;
+	border-radius: 999px;
+	font-size: var(--sl-text-2xs);
+	font-weight: 700;
+	line-height: 1.6;
+	white-space: nowrap;
+	text-decoration: none;
+}
+
+.sdp-chip[data-plan='short'] {
+	color: var(--sdp-short);
+	background: var(--sdp-short-bg);
+}
+
+.sdp-chip[data-plan='medium'] {
+	color: var(--sdp-medium);
+	background: var(--sdp-medium-bg);
+}
+
+.sdp-chip[data-plan='long'] {
+	color: var(--sdp-long);
+	background: var(--sdp-long-bg);
+}
+
+.sdp-progress {
+	--value: 0%;
+	position: relative;
+	height: 0.45rem;
+	border-radius: 999px;
+	background: var(--sdp-surface-2);
+	overflow: hidden;
+	box-shadow: inset 0 0 0 1px var(--sdp-border);
+}
+
+.sdp-progress::after {
+	content: '';
+	position: absolute;
+	inset: 0 auto 0 0;
+	width: var(--value);
+	border-radius: inherit;
+	background: var(--sdp-bar, var(--sl-color-accent));
+	transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.sdp-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 0.45rem;
+	padding: 0.55rem 1rem;
+	border-radius: 10px;
+	border: 1px solid var(--sdp-border);
+	background: var(--sdp-surface-2);
+	color: var(--sl-color-white);
+	font: inherit;
+	font-size: var(--sl-text-sm);
+	font-weight: 600;
+	line-height: 1.3;
+	text-decoration: none;
+	cursor: pointer;
+	transition:
+		background 0.15s ease,
+		border-color 0.15s ease,
+		transform 0.15s ease;
+}
+
+.sdp-button:hover {
+	border-color: var(--sl-color-accent);
+	color: var(--sl-color-white);
+}
+
+.sdp-button:active {
+	transform: translateY(1px);
+}
+
+.sdp-button[data-variant='primary'] {
+	background: var(--sl-color-accent);
+	border-color: var(--sl-color-accent);
+	color: #fff;
+}
+
+.sdp-button[data-variant='primary']:hover {
+	background: color-mix(in srgb, var(--sl-color-accent) 88%, white);
+}
+
+.sdp-button:focus-visible,
+.sdp-card a:focus-visible {
+	outline: 2px solid var(--sl-color-accent);
+	outline-offset: 2px;
+}
+
+.sdp-eyebrow {
+	font-size: var(--sl-text-xs);
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--sl-color-accent);
+}
+
+:root:not([data-theme='light']) .sdp-eyebrow {
+	color: var(--sl-color-accent-high);
+}
+
+/* Splash (home) pages get the blueprint grid. */
+[data-has-hero] .main-frame {
+	background-image:
+		linear-gradient(var(--sdp-grid-line) 1px, transparent 1px),
+		linear-gradient(90deg, var(--sdp-grid-line) 1px, transparent 1px);
+	background-size: 32px 32px;
+	background-position: -1px -1px;
+}
+
+[data-has-hero] .sl-markdown-content h2 {
+	margin-top: 3.5rem;
+	font-size: clamp(1.5rem, 1.2rem + 1vw, 1.9rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
+}

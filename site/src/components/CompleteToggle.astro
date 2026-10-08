@@ -1,0 +1,143 @@
+---
+import { flashcards } from '~/data/flashcards';
+import { plans, plansForPage } from '~/data/plans';
+import { href } from '~/utils/site';
+
+interface Props {
+	id: string;
+}
+
+const { id } = Astro.props;
+const cardCount = flashcards.filter((card) => card.topic === id).length;
+const included = plansForPage(id).map((planId) => plans[planId].label);
+const hint =
+	included.length > 0
+		? `완료로 표시하면 ${included.join('·')} 플랜의 체크리스트와 사이드바에 함께 반영됩니다.`
+		: '완료로 표시하면 사이드바에 체크 표시가 생깁니다.';
+---
+
+<section class="sdp-complete sdp-card" data-sdp-complete={id} aria-label="학습 진행 상황">
+	<div class="text">
+		<strong>이 페이지를 다 공부했나요?</strong>
+		<span>{hint} 기록은 이 브라우저에만 저장됩니다.</span>
+		{
+			cardCount > 0 && (
+				<a class="cards-link" href={`${href('practice/flashcards')}?topic=${encodeURIComponent(id)}`}>
+					이 주제 플래시카드 {cardCount}장으로 복습하기 →
+				</a>
+			)
+		}
+	</div>
+	<button type="button" class="sdp-button" aria-pressed="false">
+		<span class="when-off">학습 완료로 표시</span>
+		<span class="when-on">
+			<svg viewBox="0 0 16 16" aria-hidden="true"
+				><path
+					d="M3.5 8.5l3 3 6-7"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					stroke-linejoin="round"></path></svg
+			>
+			학습 완료
+		</span>
+	</button>
+</section>
+
+<script>
+	import { isDone, setDone, subscribe } from '~/scripts/progress';
+
+	for (const root of document.querySelectorAll<HTMLElement>('[data-sdp-complete]')) {
+		const id = root.dataset.sdpComplete!;
+		const button = root.querySelector('button')!;
+		subscribe(() => {
+			const done = isDone(id);
+			button.setAttribute('aria-pressed', String(done));
+			root.toggleAttribute('data-done', done);
+		});
+		button.addEventListener('click', () => setDone(id, !isDone(id)));
+	}
+</script>
+
+<style>
+	.sdp-complete {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem 1.5rem;
+		margin-top: 3rem;
+		padding: 1.1rem 1.25rem;
+		transition:
+			border-color 0.2s ease,
+			background 0.2s ease;
+	}
+
+	.sdp-complete[data-done] {
+		border-color: color-mix(in srgb, var(--sdp-success) 55%, var(--sdp-border));
+		background: color-mix(in srgb, var(--sdp-success) 7%, var(--sdp-surface));
+	}
+
+	.text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		flex: 1 1 20rem;
+		word-break: keep-all;
+	}
+
+	.text strong {
+		color: var(--sl-color-white);
+	}
+
+	.text span {
+		font-size: var(--sl-text-sm);
+		color: var(--sdp-muted);
+	}
+
+	.cards-link {
+		margin-top: 0.35rem;
+		font-size: var(--sl-text-sm);
+		font-weight: 650;
+		color: var(--sl-color-accent);
+		text-decoration: none;
+	}
+
+	:global(:root:not([data-theme='light'])) .cards-link {
+		color: var(--sl-color-accent-high);
+	}
+
+	.cards-link:hover {
+		text-decoration: underline;
+	}
+
+	button {
+		min-width: 10.5rem;
+	}
+
+	button svg {
+		width: 1rem;
+		height: 1rem;
+	}
+
+	.when-on {
+		display: none;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	button[aria-pressed='true'] {
+		background: var(--sdp-success);
+		border-color: var(--sdp-success);
+		color: #fff;
+	}
+
+	button[aria-pressed='true'] .when-on {
+		display: inline-flex;
+	}
+
+	button[aria-pressed='true'] .when-off {
+		display: none;
+	}
+</style>

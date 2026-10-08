@@ -1,0 +1,35 @@
+---
+title: 시스템 설계 면접 문제
+description: 자주 나오는 시스템 설계 면접 문제 8개와 해설입니다. 토론 내용, 코드, 다이어그램이 포함된 예시 해설로 자신의 설계와 비교해 보세요.
+original: https://github.com/donnemartin/system-design-primer#system-design-interview-questions-with-solutions
+---
+
+import ProblemGrid from '~/components/ProblemGrid.astro';
+
+> 자주 나오는 시스템 설계 면접 문제와 예시 토론, 코드, 다이어그램입니다.
+>
+> 해설은 원문 저장소의 `solutions/` 폴더에 있는 내용을 옮긴 것입니다.
+
+<ProblemGrid />
+
+## 해설을 제대로 활용하는 방법
+
+:::tip[먼저 직접, 그다음 비교]
+1. 문제 제목만 보고 **45분 타이머**를 맞춥니다.
+2. [면접 접근법](/interview/approach/)의 4단계에 따라 유스케이스와 제약 조건, 고수준 설계, 핵심 구성 요소, 확장을 직접 적고 다이어그램을 그립니다.
+3. 해설을 읽으며 단계별로 비교합니다. 놓친 구성 요소나 다르게 고른 저장소가 있다면 해설이 링크한 주제 페이지로 돌아가 이유를 확인합니다.
+4. 각 해설 마지막의 **복습 포인트**를 다시 읽고, 페이지 아래의 **학습 완료로 표시**를 누릅니다.
+:::
+
+| 문제 | 핵심 주제 |
+|---|---|
+| [Pastebin.com (또는 Bit.ly) 설계](/system-design/pastebin/) | 해시와 Base62 인코딩, SQL·객체 저장소, 읽기 위주 트래픽 확장 |
+| [Twitter 타임라인과 검색 (또는 Facebook 피드와 검색) 설계](/system-design/twitter/) | 팬아웃, 메모리 캐시 타임라인, 검색 클러스터 |
+| [웹 크롤러 설계](/system-design/web-crawler/) | 크롤링 우선순위, 중복 탐지, 역색인 |
+| [Mint.com 설계](/system-design/mint/) | 거래 분류, 예산 알림, 큐와 MapReduce 집계 |
+| [소셜 네트워크 자료 구조 설계](/system-design/social-graph/) | 대규모 그래프의 최단 경로, 사용자 샤딩 |
+| [검색 엔진용 키-값 저장소 설계](/system-design/query-cache/) | LRU 캐시, 캐시 확장 |
+| [Amazon 카테고리별 판매 순위 설계](/system-design/sales-rank/) | MapReduce 집계, 읽기 복제본 |
+| [AWS에서 수백만 사용자로 확장하는 시스템 설계](/system-design/scaling-aws/) | 단계적 확장, 오토스케일링, 캐시와 CDN |
+
+더 많은 문제는 [추가 시스템 설계 면접 질문](/practice/additional-questions/)에서 참고 자료와 함께 볼 수 있습니다. 새 문제를 원문에 추가하고 싶다면 [기여 방법](/about/#기여하기)을 참고하세요.
