@@ -1,0 +1,261 @@
+---
+/**
+ * Back-of-the-envelope helper that follows the conventions used in the solutions:
+ * one month ≈ 2.5 million seconds, decimal units (1 KB = 1,000 bytes).
+ * Presets reproduce the Pastebin and Twitter estimates from the upstream solutions.
+ */
+const presets = [
+	{ id: 'pastebin', label: 'Pastebin 해설 값', writes: 10, ratio: 10, size: 1.27, years: 3 },
+	{ id: 'twitter', label: 'Twitter 해설 값', writes: 15000, ratio: 16.6667, size: 10, years: 3 },
+];
+---
+
+<div class="sdp-estimate not-content" data-sdp-estimate data-presets={JSON.stringify(presets)}>
+	<div class="presets" role="group" aria-label="해설 예시 불러오기">
+		<span>예시 불러오기</span>
+		{
+			presets.map((preset) => (
+				<button type="button" data-preset={preset.id}>
+					{preset.label}
+				</button>
+			))
+		}
+	</div>
+
+	<div class="inputs">
+		<label>
+			<span class="name">월간 쓰기 요청</span>
+			<span class="input-wrap"><input type="number" min="0" step="any" value="10" data-in="writes" /><span class="unit">백만 건</span></span>
+		</label>
+		<label>
+			<span class="name">읽기 : 쓰기 비율</span>
+			<span class="input-wrap"><input type="number" min="0" step="any" value="10" data-in="ratio" /><span class="unit">: 1</span></span>
+		</label>
+		<label>
+			<span class="name">쓰기 1건당 크기</span>
+			<span class="input-wrap"><input type="number" min="0" step="any" value="1.27" data-in="size" /><span class="unit">KB</span></span>
+		</label>
+		<label>
+			<span class="name">보관 기간</span>
+			<span class="input-wrap"><input type="number" min="0" step="any" value="3" data-in="years" /><span class="unit">년</span></span>
+		</label>
+		<label>
+			<span class="name">피크 배수 <small>(가정)</small></span>
+			<span class="input-wrap"><input type="number" min="1" step="any" value="2" data-in="peak" /><span class="unit">×</span></span>
+		</label>
+	</div>
+
+	<div class="outputs" aria-live="polite">
+		<div class="out"><span class="name">평균 쓰기</span><strong data-out="writeQps"></strong><span class="how" data-how="writeQps"></span></div>
+		<div class="out"><span class="name">평균 읽기</span><strong data-out="readQps"></strong><span class="how" data-how="readQps"></span></div>
+		<div class="out"><span class="name">피크 요청 (읽기+쓰기)</span><strong data-out="peakQps"></strong><span class="how" data-how="peakQps"></span></div>
+		<div class="out"><span class="name">월간 신규 저장량</span><strong data-out="monthly"></strong><span class="how" data-how="monthly"></span></div>
+		<div class="out"><span class="name">보관 기간 총 저장량</span><strong data-out="total"></strong><span class="how" data-how="total"></span></div>
+		<div class="out"><span class="name">보관 기간 누적 건수</span><strong data-out="records"></strong><span class="how" data-how="records"></span></div>
+		<div class="out"><span class="name">쓰기 대역폭 (평균)</span><strong data-out="ingress"></strong><span class="how" data-how="ingress"></span></div>
+		<div class="out"><span class="name">읽기 대역폭 (평균)</span><strong data-out="egress"></strong><span class="how" data-how="egress"></span></div>
+	</div>
+	<p class="foot">한 달 ≈ 250만 초, 1 KB = 1,000바이트로 어림합니다. 해설과 같은 규칙이라 결과를 그대로 비교할 수 있습니다.</p>
+</div>
+
+<script>
+	const SECONDS_PER_MONTH = 2_500_000;
+
+	const num = (value: number, digits = 1) =>
+		value.toLocaleString('ko-KR', { maximumFractionDigits: value >= 100 ? 0 : digits });
+
+	function count(value: number): string {
+		if (value >= 1e12) return `${num(value / 1e12)}조`;
+		if (value >= 1e8) return `${num(value / 1e8)}억`;
+		if (value >= 1e4) return `${num(value / 1e4)}만`;
+		return num(value);
+	}
+
+	function bytes(value: number): string {
+		const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB'];
+		let i = 0;
+		while (value >= 1000 && i < units.length - 1) {
+			value /= 1000;
+			i++;
+		}
+		return `${num(value, value < 10 ? 2 : 1)} ${units[i]}`;
+	}
+
+	const rate = (qps: number) => `${num(qps)} 요청/초`;
+
+	for (const root of document.querySelectorAll<HTMLElement>('[data-sdp-estimate]')) {
+		const presets = JSON.parse(root.dataset.presets!) as Record<string, number | string>[];
+		const input = (name: string) => root.querySelector<HTMLInputElement>(`[data-in="${name}"]`)!;
+		const set = (name: string, value: string, how: string) => {
+			root.querySelector(`[data-out="${name}"]`)!.textContent = value;
+			root.querySelector(`[data-how="${name}"]`)!.textContent = how;
+		};
+
+		function render() {
+			const writes = Math.max(0, Number(input('writes').value) || 0) * 1e6;
+			const ratio = Math.max(0, Number(input('ratio').value) || 0);
+			const size = Math.max(0, Number(input('size').value) || 0) * 1000;
+			const years = Math.max(0, Number(input('years').value) || 0);
+			const peak = Math.max(1, Number(input('peak').value) || 1);
+
+			const reads = writes * ratio;
+			const writeQps = writes / SECONDS_PER_MONTH;
+			const readQps = reads / SECONDS_PER_MONTH;
+			const monthly = writes * size;
+			const months = years * 12;
+
+			set('writeQps', rate(writeQps), `월 ${count(writes)}건 ÷ 250만 초`);
+			set('readQps', rate(readQps), `월 ${count(reads)}건 ÷ 250만 초`);
+			set('peakQps', rate((writeQps + readQps) * peak), `(${num(writeQps)} + ${num(readQps)}) × ${num(peak)}`);
+			set('monthly', bytes(monthly), `${bytes(size)} × ${count(writes)}건`);
+			set('total', bytes(monthly * months), `월 ${bytes(monthly)} × ${num(months)}개월`);
+			set('records', `${count(writes * months)}건`, `월 ${count(writes)}건 × ${num(months)}개월`);
+			set('ingress', `${bytes(writeQps * size)}/초`, `${num(writeQps)} 요청/초 × ${bytes(size)}`);
+			set('egress', `${bytes(readQps * size)}/초`, `${num(readQps)} 요청/초 × ${bytes(size)}`);
+		}
+
+		for (const button of root.querySelectorAll<HTMLButtonElement>('[data-preset]')) {
+			button.addEventListener('click', () => {
+				const preset = presets.find((p) => p.id === button.dataset.preset);
+				if (!preset) return;
+				for (const key of ['writes', 'ratio', 'size', 'years']) input(key).value = String(preset[key]);
+				render();
+			});
+		}
+		root.querySelectorAll('input').forEach((el) => el.addEventListener('input', render));
+		render();
+	}
+</script>
+
+<style>
+	.sdp-estimate {
+		display: grid;
+		gap: 1rem;
+		margin-block: 1.5rem;
+		padding: 1.15rem;
+		border: 1px solid var(--sdp-border);
+		border-radius: var(--sdp-radius);
+		background: var(--sdp-surface);
+		box-shadow: var(--sdp-shadow);
+	}
+
+	.presets {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: var(--sl-text-xs);
+		color: var(--sdp-muted);
+	}
+
+	.presets span {
+		margin-inline-end: 0.25rem;
+	}
+
+	.presets button {
+		padding: 0.3rem 0.7rem;
+		border-radius: 999px;
+		border: 1px solid var(--sdp-border);
+		background: var(--sdp-surface-2);
+		color: var(--sl-color-gray-2);
+		font: inherit;
+		font-size: var(--sl-text-xs);
+		font-weight: 650;
+		cursor: pointer;
+	}
+
+	.presets button:hover {
+		border-color: var(--sl-color-accent);
+		color: var(--sl-color-white);
+	}
+
+	.inputs {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+		gap: 0.75rem;
+	}
+
+	label {
+		display: grid;
+		gap: 0.3rem;
+		min-width: 0;
+	}
+
+	.name {
+		font-size: var(--sl-text-xs);
+		color: var(--sdp-muted);
+	}
+
+	.name small {
+		font-size: inherit;
+		opacity: 0.8;
+	}
+
+	.input-wrap {
+		display: flex;
+		align-items: center;
+		border: 1px solid var(--sdp-border);
+		border-radius: 8px;
+		background: var(--sl-color-black);
+	}
+
+	.input-wrap:focus-within {
+		border-color: var(--sl-color-accent);
+	}
+
+	input {
+		flex: 1;
+		width: 100%;
+		min-width: 0;
+		padding: 0.45rem 0.6rem;
+		border: 0;
+		background: transparent;
+		color: var(--sl-color-white);
+		font: inherit;
+		font-weight: 650;
+		font-variant-numeric: tabular-nums;
+		outline: none;
+	}
+
+	.unit {
+		padding-inline: 0.55rem;
+		font-size: var(--sl-text-xs);
+		color: var(--sdp-muted);
+		white-space: nowrap;
+	}
+
+	.outputs {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+		gap: 0.5rem;
+	}
+
+	.out {
+		display: grid;
+		gap: 0.1rem;
+		padding: 0.75rem 0.85rem;
+		border-radius: 10px;
+		background: var(--sdp-surface-2);
+		border: 1px solid var(--sdp-border);
+	}
+
+	.out strong {
+		font-size: 1.2rem;
+		font-weight: 800;
+		letter-spacing: -0.02em;
+		color: var(--sl-color-white);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.how {
+		font-size: var(--sl-text-2xs);
+		color: var(--sdp-muted);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.foot {
+		margin: 0;
+		font-size: var(--sl-text-2xs);
+		color: var(--sdp-muted);
+	}
+</style>

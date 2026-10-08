@@ -1,0 +1,84 @@
+---
+title: 카드 덱 설계 (Design a deck of cards)
+description: 범용 카드 덱을 추상 클래스로 설계한 뒤 블랙잭용 카드와 핸드로 확장하며, 상속과 다형성으로 게임별 규칙을 분리하는 방법을 익힙니다.
+original: https://github.com/donnemartin/system-design-primer/blob/master/solutions/object_oriented_design/deck_of_cards/deck_of_cards.ipynb
+---
+import { Code } from '@astrojs/starlight/components';
+import source from '@repo/solutions/object_oriented_design/deck_of_cards/deck_of_cards.py?raw';
+
+:::note[이 문제에서 배우는 것]
+- 범용 개념(`Card`, `Hand`)을 먼저 만들고 특정 게임(블랙잭)용 하위 클래스로 확장하는 상속 구조
+- 추상 프로퍼티(abstract property)를 이용해 "카드의 값"을 게임마다 다르게 해석하게 하는 방법
+- 에이스처럼 값이 둘 이상일 수 있는 규칙을 카드가 아닌 점수 계산 쪽에서 다루는 책임 분리
+- 인덱스 하나로 나눠 준 카드와 남은 카드를 구분하는 단순한 덱 구현
+:::
+
+## 제약 조건과 가정 (Constraints and assumptions)
+
+- 포커나 블랙잭 같은 게임에 두루 쓰는 범용 카드 덱인가요?
+  - 네. 범용 덱을 설계한 다음 블랙잭으로 확장하세요.
+- 덱은 52장(2-10, 잭, 퀸, 킹, 에이스)이고 무늬(suit)는 4가지라고 가정해도 될까요?
+  - 네.
+- 입력이 유효하다고 가정해도 될까요, 아니면 직접 검증해야 하나요?
+  - 유효하다고 가정합니다.
+
+## 설계 개요
+
+| 클래스 | 역할 | 핵심 속성·메서드 |
+|---|---|---|
+| `Suit` (enum) | 카드의 무늬 | `HEART`, `DIAMOND`, `CLUBS`, `SPADE` |
+| `Card` (추상 클래스) | 모든 카드의 공통 부분. 값의 의미는 하위 클래스가 정함 | `value`(추상 프로퍼티), `suit`, `is_available` |
+| `BlackJackCard` | 블랙잭 규칙대로 값을 해석하는 카드 | `is_ace()`, `is_face_card()`, `value` getter·setter |
+| `Hand` | 플레이어가 손에 든 카드 묶음 | `cards`, `add_card()`, `score()` |
+| `BlackJackHand` | 블랙잭 점수 규칙을 적용한 핸드 | `BLACKJACK = 21`, `score()`, `possible_scores()` |
+| `Deck` | 카드 더미에서 카드를 한 장씩 나눠 주는 덱 | `cards`, `deal_index`, `remaining_cards()`, `deal_card()`, `shuffle()` |
+
+- **카드의 값**: `Card`는 `value`를 추상 프로퍼티로 선언해, 값을 어떻게 저장하고 해석할지를 하위 클래스에 맡깁니다. `Card.__init__()`의 `self.value = value`는 하위 클래스의 setter를 거치므로, `BlackJackCard`는 생성 시점부터 1–13 범위를 벗어난 값을 `ValueError`로 막습니다. 실제 숫자는 `_value`에 저장되며 1은 에이스, 11·12·13은 잭·퀸·킹입니다.
+- **블랙잭의 값 해석**: `BlackJackCard.value` getter는 에이스면 1, 그림 카드(잭·퀸·킹)면 10, 나머지는 숫자를 그대로 돌려줍니다. 에이스를 11로도 셀 수 있다는 규칙은 카드 한 장이 아니라 핸드의 점수 계산에서 다룹니다.
+- **점수 계산**: `Hand.score()`는 카드 값을 단순히 더합니다. `BlackJackHand.score()`는 이를 오버라이드해, `possible_scores()`가 돌려주는 점수 후보 가운데 21 이하에서 가장 큰 점수를 고르고, 그런 점수가 없으면 21을 넘는 점수 중 가장 작은 점수를 돌려줍니다. 에이스를 고려해 점수 후보 목록을 만드는 `possible_scores()`는 원본 코드에서 구현되지 않은 채(`pass`) 남아 있습니다.
+- **카드 나눠 주기**: `Deck`은 카드를 리스트에서 빼지 않고 `deal_index`로 다음에 줄 카드를 가리킵니다. `deal_card()`는 그 카드의 `is_available`을 `False`로 바꾸고 인덱스를 하나 늘리며, 카드가 다 떨어져 `IndexError`가 나면 `None`을 돌려줍니다. 남은 장수는 `len(self.cards) - self.deal_index`로 계산합니다. 카드를 섞는 `shuffle()`은 원본 코드에서 구현되지 않은 채(`pass`) 남아 있습니다.
+
+## 해설 코드
+
+<Code code={source} lang="py" title="deck_of_cards.py" />
+
+:::caution[코드를 읽을 때 주의할 점]
+`BlackJackHand.score()`가 쓰는 `sys.MAXSIZE`는 파이썬에 없는 이름입니다(`sys.maxsize`가 맞습니다). `possible_scores()`도 비어 있으므로, 이 메서드는 그대로는 동작하지 않습니다.
+:::
+
+## 면접에서는
+
+- **제약 조건부터 확인하세요.** "어떤 게임에 쓰는 덱인가?"가 첫 질문입니다. 이 문제처럼 범용 덱을 설계한 뒤 특정 게임으로 확장하라는 답을 들으면, 공통 부분과 게임별 부분을 나누는 것이 설계의 중심이 됩니다. 카드 장수와 무늬 수도 함께 확인합니다.
+- **핵심 객체를 고르세요.** 무늬, 카드, 핸드, 덱입니다. 그중 게임마다 달라지는 것(카드 값의 해석, 점수 계산)은 추상 프로퍼티나 오버라이드할 메서드로 열어 둡니다.
+- **관계와 책임을 설명하세요.** 덱과 핸드는 카드를 여러 장 갖고, 카드는 무늬를 가집니다. 이 코드는 카드 한 장의 값은 `BlackJackCard`에, 여러 장을 조합한 점수는 `BlackJackHand`에 둡니다. 에이스(1 또는 11)와 그림 카드(10) 규칙이 어디에 들어가는지 말할 수 있어야 합니다.
+- **확장 포인트를 짚어 두세요.** 섞기 알고리즘, 포커처럼 다른 게임의 핸드 평가, 조커처럼 52장 밖의 카드를 추가할 때 어떤 클래스를 상속하거나 고치면 되는지 설명해 보세요.
+
+## 스스로 점검하기
+
+<details>
+<summary>왜 `Card.value`를 추상 프로퍼티로 두었나요?</summary>
+
+같은 카드라도 게임마다 값의 의미가 다르기 때문입니다. 블랙잭은 그림 카드를 10으로 보지만 다른 게임은 그렇지 않을 수 있습니다. 추상 프로퍼티로 두면 하위 클래스가 값의 저장·검증·해석 규칙을 반드시 정의해야 하고, `Hand.score()`처럼 `card.value`만 쓰는 코드는 게임과 상관없이 그대로 재사용할 수 있습니다.
+
+</details>
+
+<details>
+<summary>핸드가 에이스와 킹으로 이루어져 있다면 점수는 어떻게 계산되나요?</summary>
+
+에이스를 1로 세면 11점, 11로 세면 21점이므로 `possible_scores()`는 `[11, 21]`을 돌려줘야 합니다. `BlackJackHand.score()`는 이 가운데 21 이하에서 가장 큰 21을 고릅니다. 반대로 모든 후보가 21을 넘으면 그중 가장 작은 점수를 돌려줍니다.
+
+</details>
+
+<details>
+<summary>`deal_card()`와 `remaining_cards()`의 시간 복잡도는 어떻게 되나요?</summary>
+
+둘 다 O(1)입니다. 카드를 리스트에서 지우지 않고 `deal_index`만 하나씩 옮기며, 남은 장수도 `len(self.cards) - self.deal_index`로 바로 계산하기 때문입니다.
+
+</details>
+
+<details>
+<summary>`shuffle()`을 구현할 때 주의할 점은 무엇인가요?</summary>
+
+`deal_index` 앞쪽의 카드는 이미 나눠 준 카드입니다. 따라서 남은 카드(`deal_index` 이후)만 섞거나, 모든 카드를 회수해 `is_available`을 `True`로 되돌리고 `deal_index`를 0으로 초기화한 뒤 전체를 섞어야 합니다. 그렇지 않으면 이미 나간 카드를 다시 나눠 주게 됩니다.
+
+</details>

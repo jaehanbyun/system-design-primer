@@ -1,0 +1,73 @@
+---
+title: System Design Primer 한국어 학습판
+description: 대규모 시스템 설계를 배우고 시스템 설계 면접을 준비하세요. donnemartin/system-design-primer를 면접 일정에 맞춘 학습 플랜, 주제 지도, 해설이 있는 설계 문제, 플래시카드와 함께 한국어로 공부합니다.
+template: splash
+hero:
+  title: 대규모 시스템 설계,<br/><em>학습 플랜</em>으로 시작하세요
+  tagline: 흩어진 시스템 설계 자료를 한곳에 모은 System Design Primer를 한국어로 읽고, 면접까지 남은 시간에 맞춘 플랜으로 차근차근 공부하세요.
+---
+
+import TrackCards from '~/components/TrackCards.astro';
+import StudyGuideMatrix from '~/components/StudyGuideMatrix.astro';
+import TopicGrid from '~/components/TopicGrid.astro';
+import ProblemGrid from '~/components/ProblemGrid.astro';
+import LinkTiles from '~/components/LinkTiles.astro';
+
+## 면접까지 얼마나 남았나요?
+
+모든 것을 알아야 하는 것은 아닙니다. 원문의 [학습 가이드](/guide/)는 **넓게 시작해서 몇몇 영역은 깊게** 파고들라고 권합니다. 남은 기간에 맞는 플랜을 고르면 무엇을 어떤 순서로 공부할지 체크리스트로 안내합니다. 진행 상황은 이 브라우저에 저장됩니다.
+
+<TrackCards />
+
+## 학습 가이드 한눈에 보기
+
+기간이 길수록 같은 범위를 더 깊게 보고, 더 많은 문제를 풀어 봅니다. 각 항목을 누르면 해당 자료로 이동합니다.
+
+<StudyGuideMatrix />
+
+## 무엇을 배우나요?
+
+시스템 설계 주제를 요청이 흐르는 순서대로 묶었습니다. 각 주제는 장단점을 함께 정리합니다. **모든 것은 트레이드오프입니다.**
+
+<TopicGrid />
+
+## 해설이 있는 시스템 설계 문제
+
+먼저 직접 설계해 보고 해설과 비교하세요. 해설마다 토론 내용, 코드, 다이어그램이 있습니다.
+
+<ProblemGrid />
+
+## 복습과 연습 도구
+
+<LinkTiles
+	items={[
+		{
+			title: '플래시카드',
+			description: '핵심 개념, 설계 문제, 객체 지향 설계를 질문과 답으로 복습합니다. 아는 카드와 다시 볼 카드를 나눠 관리할 수 있습니다.',
+			href: 'practice/flashcards',
+			icon: 'cards',
+		},
+		{
+			title: '어림 계산기',
+			description: '월간 요청 수와 데이터 크기로 QPS, 저장량, 대역폭을 바로 계산합니다. 해설과 같은 어림 규칙을 씁니다.',
+			href: 'interview/estimation',
+			icon: 'calculator',
+		},
+		{
+			title: '가용성 계산기',
+			description: '99.9%와 99.99%는 얼마나 다를까요? 허용 다운타임과 직렬·병렬 구성의 가용성을 계산합니다.',
+			href: 'topics/availability-patterns',
+			icon: 'pulse',
+		},
+		{
+			title: '지연 시간 숫자',
+			description: 'L1 캐시부터 대륙 간 패킷 왕복까지, 모든 프로그래머가 알아야 할 지연 시간을 로그 스케일로 비교합니다.',
+			href: 'appendix/latency-numbers',
+			icon: 'clock',
+		},
+	]}
+/>
+
+## 이 사이트에 대해
+
+이 사이트는 [donnemartin/system-design-primer](https://github.com/donnemartin/system-design-primer)(CC BY 4.0)를 한국어로 옮기고, 원문의 학습 가이드를 중심으로 다시 구성한 학습용 사이트입니다. 각 페이지 제목 아래 **원문 (English)** 링크로 원문 섹션을 바로 확인할 수 있습니다. 번역과 재구성 방식은 [이 사이트에 대해](/about/)에서 볼 수 있습니다.

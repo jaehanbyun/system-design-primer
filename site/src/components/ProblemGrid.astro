@@ -1,0 +1,210 @@
+---
+import { Image } from 'astro:assets';
+import { getEntry } from 'astro:content';
+import { oodProblems, systemDesignProblems } from '~/data/problems';
+import { href } from '~/utils/site';
+
+interface Props {
+	kind?: 'system-design' | 'ood';
+	limit?: number;
+}
+
+const { kind = 'system-design', limit } = Astro.props;
+
+async function description(page: string) {
+	const entry = await getEntry('docs', page);
+	if (!entry) throw new Error(`Problem grid references a missing page: ${page}`);
+	return entry.data.description ?? '';
+}
+
+const sd = await Promise.all(
+	systemDesignProblems.slice(0, limit).map(async (problem) => ({ ...problem, description: await description(problem.page) })),
+);
+const ood = await Promise.all(
+	oodProblems.slice(0, limit).map(async (problem) => ({ ...problem, description: await description(problem.page) })),
+);
+---
+
+{
+	kind === 'system-design' ? (
+		<ul class="sdp-problems not-content">
+			{sd.map((problem, index) => (
+				<li>
+					<a href={href(problem.page)} data-sdp-problem={problem.page}>
+						<div class="thumb">
+							<Image src={problem.image} alt="" width={560} loading="lazy" />
+							<span class="num">{String(index + 1).padStart(2, '0')}</span>
+						</div>
+						<div class="body">
+							<span class="q">{problem.question}</span>
+							<span class="tags">
+								{problem.concepts.map((concept) => (
+									<span>{concept}</span>
+								))}
+							</span>
+						</div>
+					</a>
+				</li>
+			))}
+		</ul>
+	) : (
+		<ul class="sdp-problems ood not-content">
+			{ood.map((problem, index) => (
+				<li>
+					<a href={href(problem.page)} data-sdp-problem={problem.page}>
+						<div class="body">
+							<span class="num inline">{String(index + 1).padStart(2, '0')}</span>
+							<span class="q">{problem.question}</span>
+							<span class="desc">{problem.description}</span>
+							<span class="tags">
+								{problem.concepts.map((concept) => (
+									<span>{concept}</span>
+								))}
+							</span>
+						</div>
+					</a>
+				</li>
+			))}
+		</ul>
+	)
+}
+
+<script>
+	import { doneIds, subscribe } from '~/scripts/progress';
+
+	const links = [...document.querySelectorAll<HTMLElement>('[data-sdp-problem]')];
+	subscribe(() => {
+		const done = doneIds();
+		for (const link of links) link.toggleAttribute('data-done', done.has(link.dataset.sdpProblem!));
+	});
+</script>
+
+<style>
+	.sdp-problems {
+		list-style: none;
+		margin: 1.5rem 0;
+		padding: 0;
+		display: grid;
+		gap: 1rem;
+		grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+	}
+
+	a {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		border-radius: var(--sdp-radius);
+		border: 1px solid var(--sdp-border);
+		background: var(--sdp-surface);
+		box-shadow: var(--sdp-shadow);
+		text-decoration: none;
+		overflow: hidden;
+		transition:
+			border-color 0.18s ease,
+			transform 0.18s ease;
+	}
+
+	a:hover {
+		border-color: var(--sl-color-accent);
+		transform: translateY(-2px);
+	}
+
+	.thumb {
+		position: relative;
+		aspect-ratio: 4 / 3;
+		background: #fff;
+		border-bottom: 1px solid var(--sdp-border);
+		overflow: hidden;
+	}
+
+	.thumb img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		object-position: 50% 18%;
+		transition: transform 0.4s ease;
+	}
+
+	a:hover .thumb img {
+		transform: scale(1.04);
+	}
+
+	.num {
+		position: absolute;
+		top: 0.6rem;
+		inset-inline-start: 0.6rem;
+		padding: 0.05rem 0.5rem;
+		border-radius: 999px;
+		font-size: var(--sl-text-2xs);
+		font-weight: 800;
+		color: #fff;
+		background: rgba(12, 17, 34, 0.78);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.num.inline {
+		position: static;
+		align-self: flex-start;
+		color: var(--sl-color-accent-high);
+		background: var(--sl-color-accent-low);
+	}
+
+	:global(:root[data-theme='light']) .num.inline {
+		color: var(--sl-color-accent);
+	}
+
+	.body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.55rem;
+		padding: 0.9rem 1rem 1rem;
+		flex: 1;
+	}
+
+	.q {
+		font-weight: 700;
+		line-height: 1.5;
+		color: var(--sl-color-white);
+		word-break: keep-all;
+	}
+
+	.desc {
+		font-size: var(--sl-text-xs);
+		line-height: 1.6;
+		color: var(--sdp-muted);
+		word-break: keep-all;
+	}
+
+	.tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem;
+		margin-top: auto;
+	}
+
+	.tags span {
+		padding: 0.1rem 0.5rem;
+		border-radius: 6px;
+		font-size: var(--sl-text-2xs);
+		font-weight: 600;
+		color: var(--sl-color-gray-2);
+		background: var(--sdp-surface-2);
+		border: 1px solid var(--sdp-border);
+	}
+
+	a[data-done]::after {
+		content: '완료';
+		position: absolute;
+		top: 0.6rem;
+		inset-inline-end: 0.6rem;
+		padding: 0.05rem 0.55rem 0.05rem 1.45rem;
+		border-radius: 999px;
+		font-size: var(--sl-text-2xs);
+		font-weight: 800;
+		color: #fff;
+		background: var(--sdp-success)
+			url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8.5l2.6 2.5L12 5.5'/%3E%3C/svg%3E")
+			0.4rem center / 0.85rem no-repeat;
+	}
+</style>

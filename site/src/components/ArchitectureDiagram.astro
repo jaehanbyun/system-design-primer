@@ -1,0 +1,239 @@
+---
+/**
+ * Decorative blueprint of a typical read-heavy web system, used on the home hero.
+ * Packets travel along the read path (client → cache) and the write path (client → workers → DB).
+ */
+const nodes = [
+	{ id: 'dns', x: 20, y: 16, w: 116, label: 'DNS' },
+	{ id: 'client', x: 182, y: 16, w: 116, label: 'Client', kind: 'client' },
+	{ id: 'cdn', x: 344, y: 16, w: 116, label: 'CDN' },
+	{ id: 'lb', x: 160, y: 100, w: 160, label: 'Load Balancer', kind: 'accent' },
+	{ id: 'write', x: 20, y: 186, w: 116, label: 'Write API' },
+	{ id: 'read', x: 182, y: 186, w: 116, label: 'Read API', scale: true },
+	{ id: 'search', x: 344, y: 186, w: 116, label: 'Search API' },
+	{ id: 'queue', x: 20, y: 272, w: 116, label: 'Queue' },
+	{ id: 'cache', x: 182, y: 272, w: 116, label: 'Memory Cache', kind: 'accent' },
+	{ id: 'index', x: 344, y: 272, w: 116, label: 'Search Index' },
+	{ id: 'workers', x: 20, y: 358, w: 116, label: 'Workers' },
+	{ id: 'primary', x: 182, y: 358, w: 116, label: 'SQL Primary', kind: 'db' },
+	{ id: 'replica', x: 344, y: 358, w: 116, label: 'SQL Replica', kind: 'db' },
+];
+
+const h = 42;
+const links = [
+	{ d: 'M136 37 H182', dashed: true },
+	{ d: 'M298 37 H344', dashed: true },
+	{ d: 'M240 58 V100' },
+	{ d: 'M240 142 V164 M78 164 H402 M78 164 V186 M240 164 V186 M402 164 V186' },
+	{ d: 'M78 228 V272' },
+	{ d: 'M240 228 V272' },
+	{ d: 'M402 228 V272' },
+	{ d: 'M78 314 V358' },
+	{ d: 'M240 314 V358', dashed: true },
+	{ d: 'M136 379 H182' },
+	{ d: 'M240 400 C240 424 402 424 402 400', dashed: true },
+];
+
+const readPath = 'M240 58 V100 M240 142 V186 M240 228 V272';
+const writePath = 'M240 58 V142 V164 H78 V358 V379 H182';
+---
+
+<figure class="sdp-blueprint" aria-hidden="true">
+	<svg viewBox="0 0 480 456" role="presentation">
+		<defs>
+			<pattern id="sdp-bp-grid" width="16" height="16" patternUnits="userSpaceOnUse">
+				<path d="M16 0H0V16" fill="none" class="grid"></path>
+			</pattern>
+		</defs>
+		<rect x="0" y="0" width="480" height="456" rx="18" class="sheet"></rect>
+		<rect x="0" y="0" width="480" height="456" rx="18" fill="url(#sdp-bp-grid)"></rect>
+
+		{links.map((link) => <path d={link.d} class:list={['link', { dashed: link.dashed }]} />)}
+
+		<text x="159" y="373" class="note" text-anchor="middle">async</text>
+		<text x="321" y="430" class="note" text-anchor="middle">replication</text>
+		<text x="246" y="339" class="note">miss</text>
+
+		{
+			nodes.map((node) => (
+				<g class:list={['node', node.kind]}>
+					<rect x={node.x} y={node.y} width={node.w} height={h} rx="9" />
+					<text x={node.x + node.w / 2} y={node.y + h / 2 + 4.5} text-anchor="middle">
+						{node.label}
+					</text>
+					{node.scale && (
+						<g class="badge">
+							<rect x={node.x + node.w - 26} y={node.y - 9} width="32" height="18" rx="9" />
+							<text x={node.x + node.w - 10} y={node.y + 4} text-anchor="middle">
+								×N
+							</text>
+						</g>
+					)}
+				</g>
+			))
+		}
+
+		<circle r="4.5" class="packet read">
+			<animateMotion dur="2.6s" repeatCount="indefinite" path={readPath} keyPoints="0;1" keyTimes="0;1"
+			></animateMotion>
+		</circle>
+		<circle r="4.5" class="packet write">
+			<animateMotion dur="4.2s" repeatCount="indefinite" path={writePath}></animateMotion>
+		</circle>
+
+		<g class="title-block">
+			<rect x="20" y="441" width="440" height="1" class="rule"></rect>
+			<text x="20" y="451" text-anchor="start">SDP-01</text>
+			<text x="460" y="451" text-anchor="end">READ-HEAVY WEB APP</text>
+		</g>
+	</svg>
+</figure>
+
+<style>
+	.sdp-blueprint {
+		--d-sheet: #0e1630;
+		--d-grid: rgba(120, 155, 255, 0.09);
+		--d-box: #111b38;
+		--d-stroke: #34478a;
+		--d-text: #dbe5ff;
+		--d-link: #3c5299;
+		--d-accent: #6f93ff;
+		--d-db: #2fc6b0;
+		--d-note: #7f8db3;
+		--d-packet-read: #8fb0ff;
+		--d-packet-write: #b18cff;
+		margin: 0;
+		width: 100%;
+		filter: drop-shadow(0 24px 48px rgba(3, 8, 25, 0.55));
+	}
+
+	:global(:root[data-theme='light']) .sdp-blueprint {
+		--d-sheet: #f7f9ff;
+		--d-grid: rgba(44, 86, 224, 0.08);
+		--d-box: #ffffff;
+		--d-stroke: #a9bbee;
+		--d-text: #1a2a5c;
+		--d-link: #9fb2e8;
+		--d-accent: #2c56e0;
+		--d-db: #0e8f7d;
+		--d-note: #7381a8;
+		--d-packet-read: #2c56e0;
+		--d-packet-write: #7446d6;
+		filter: drop-shadow(0 22px 40px rgba(30, 50, 110, 0.18));
+	}
+
+	svg {
+		display: block;
+		width: 100%;
+		height: auto;
+		font-family: var(--__sl-font);
+	}
+
+	.sheet {
+		fill: var(--d-sheet);
+		stroke: var(--d-stroke);
+		stroke-opacity: 0.5;
+	}
+
+	.grid {
+		stroke: var(--d-grid);
+		stroke-width: 1;
+	}
+
+	.link {
+		fill: none;
+		stroke: var(--d-link);
+		stroke-width: 1.6;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+
+	.link.dashed {
+		stroke-dasharray: 4 5;
+		animation: sdp-dash 1.4s linear infinite;
+	}
+
+	@keyframes sdp-dash {
+		to {
+			stroke-dashoffset: -18;
+		}
+	}
+
+	.node rect {
+		fill: var(--d-box);
+		stroke: var(--d-stroke);
+		stroke-width: 1.4;
+	}
+
+	.node text {
+		fill: var(--d-text);
+		font-size: 13px;
+		font-weight: 650;
+		letter-spacing: -0.01em;
+	}
+
+	.node.accent rect {
+		stroke: var(--d-accent);
+		stroke-width: 1.8;
+	}
+
+	.node.db rect {
+		stroke: var(--d-db);
+		stroke-width: 1.6;
+	}
+
+	.node.client rect {
+		stroke-dasharray: 3 3;
+	}
+
+	.badge rect {
+		fill: var(--d-accent);
+		stroke: none;
+	}
+
+	.badge text {
+		fill: #fff;
+		font-size: 10.5px;
+		font-weight: 800;
+	}
+
+	.note {
+		fill: var(--d-note);
+		font-size: 10px;
+		font-style: italic;
+		letter-spacing: 0.02em;
+	}
+
+	.packet {
+		stroke: var(--d-sheet);
+		stroke-width: 2;
+	}
+
+	.packet.read {
+		fill: var(--d-packet-read);
+	}
+
+	.packet.write {
+		fill: var(--d-packet-write);
+	}
+
+	.title-block text {
+		fill: var(--d-note);
+		font-size: 9px;
+		font-weight: 700;
+		letter-spacing: 0.14em;
+	}
+
+	.rule {
+		fill: var(--d-stroke);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.packet {
+			display: none;
+		}
+		.link.dashed {
+			animation: none;
+		}
+	}
+</style>

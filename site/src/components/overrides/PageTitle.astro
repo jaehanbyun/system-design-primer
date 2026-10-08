@@ -1,0 +1,129 @@
+---
+import Default from '@astrojs/starlight/components/PageTitle.astro';
+import { plans, plansForPage } from '~/data/plans';
+import { href, isTrackable, readingMinutes } from '~/utils/site';
+
+const { entry, id } = Astro.locals.starlightRoute;
+const minutes = isTrackable(id, entry.data.trackable) ? readingMinutes(entry.body) : undefined;
+const included = plansForPage(id);
+const original = entry.data.original;
+---
+
+<Default />
+<div class="sdp-page-meta">
+	{
+		minutes && (
+			<span class="meta-item" title="예상 읽기 시간">
+				<svg viewBox="0 0 16 16" aria-hidden="true">
+					<circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5" />
+					<path d="M8 4.75V8l2.25 1.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+				</svg>
+				약 {minutes}분
+			</span>
+		)
+	}
+	{
+		included.length > 0 && (
+			<span class="meta-item plans" title="이 페이지가 포함된 학습 플랜">
+				{included.map((planId) => (
+					<a class="sdp-chip" data-plan={planId} href={href(`guide/${planId}`)}>
+						{plans[planId].label}
+					</a>
+				))}
+			</span>
+		)
+	}
+	<span class="meta-item done" data-sdp-done-chip hidden>
+		<svg viewBox="0 0 16 16" aria-hidden="true"
+			><path
+				d="M3.5 8.5l3 3 6-7"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"></path></svg
+		>
+		학습 완료
+	</span>
+	{
+		original && (
+			<a class="meta-item source" href={original} target="_blank" rel="noopener">
+				원문 (English)
+				<svg viewBox="0 0 16 16" aria-hidden="true">
+					<path
+						d="M6 3.5H3.5v9h9V10M9 3.5h3.5V7M12.5 3.5 7 9"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				</svg>
+			</a>
+		)
+	}
+</div>
+
+<script>
+	import { idFromPath, isDone, subscribe } from '~/scripts/progress';
+
+	const chip = document.querySelector<HTMLElement>('[data-sdp-done-chip]');
+	if (chip) {
+		const id = idFromPath(location.pathname);
+		subscribe(() => {
+			chip.hidden = !isDone(id);
+		});
+	}
+</script>
+
+<style>
+	.sdp-page-meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem 1.1rem;
+		margin-top: 0.75rem;
+		font-size: var(--sl-text-xs);
+		color: var(--sdp-muted);
+	}
+
+	.meta-item {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	.meta-item svg {
+		width: 0.95rem;
+		height: 0.95rem;
+		flex: none;
+	}
+
+	.plans {
+		gap: 0.3rem;
+	}
+
+	.done {
+		color: var(--sdp-success);
+		font-weight: 700;
+	}
+
+	.done[hidden] {
+		display: none;
+	}
+
+	.source {
+		color: var(--sdp-muted);
+		text-decoration: none;
+	}
+
+	.source:hover {
+		color: var(--sl-color-accent);
+	}
+
+	@media (min-width: 50rem) {
+		.source {
+			margin-inline-start: auto;
+		}
+	}
+</style>

@@ -1,0 +1,99 @@
+---
+title: 채팅 서버 설계 (Design a chat server)
+description: 사용자 관리, 친구 요청, 1:1 채팅과 그룹 채팅을 지원하는 채팅 서버를 객체 지향으로 설계하고, 각 클래스가 맡는 데이터와 관계를 정리합니다.
+original: https://github.com/donnemartin/system-design-primer/blob/master/solutions/object_oriented_design/online_chat/online_chat.ipynb
+---
+import { Code } from '@astrojs/starlight/components';
+import source from '@repo/solutions/object_oriented_design/online_chat/online_chat.py?raw';
+
+:::note[이 문제에서 배우는 것]
+- 요구 사항(워크플로 목록)에서 사용자, 채팅, 메시지, 친구 요청 같은 핵심 객체를 뽑아내는 방법
+- 1:1 채팅과 그룹 채팅의 공통점을 추상 클래스 `Chat`으로 묶는 상속 구조
+- 친구 요청처럼 상태가 바뀌는 상호작용을 별도 객체(`AddRequest`)와 enum(`RequestStatus`)으로 모델링하는 방법
+- ID를 키로 하는 딕셔너리로 사용자·친구·채팅을 바로 찾을 수 있게 데이터를 구성하는 방법
+:::
+
+## 제약 조건과 가정 (Constraints and assumptions)
+
+- 다음 워크플로에 집중한다고 가정합니다.
+  - 텍스트 대화만 다룹니다.
+  - 사용자
+    - 사용자 추가
+    - 사용자 삭제
+    - 사용자 정보 수정
+    - 사용자의 친구 목록에 추가
+      - 친구 추가 요청
+        - 친구 요청 승인
+        - 친구 요청 거절
+    - 사용자의 친구 목록에서 삭제
+  - 그룹 채팅 만들기
+    - 친구를 그룹 채팅에 초대
+    - 그룹 채팅에 메시지 게시
+  - 1:1 개인 채팅
+    - 친구를 개인 채팅에 초대
+    - 개인 채팅에 메시지 게시
+- 처음에는 확장(scaling)을 고민하지 않아도 됩니다.
+
+## 설계 개요
+
+| 클래스 | 역할 | 핵심 속성·메서드 |
+|---|---|---|
+| `UserService` | 전체 사용자를 관리하고 사용자 사이의 친구 요청을 처리 | `users_by_id`, `add_user()`, `remove_user()`, `add_friend_request()`, `approve_friend_request()`, `reject_friend_request()` |
+| `User` | 사용자 한 명. 자신의 친구, 채팅, 주고받은 친구 요청을 보관 | `user_id`, `name`, `pass_hash`, `friends_by_id`, `friend_ids_to_private_chats`, `group_chats_by_id`, `received_friend_requests_by_friend_id`, `sent_friend_requests_by_friend_id`, `message_user()`, `message_group()`, `send_friend_request()`, `receive_friend_request()`, `approve_friend_request()`, `reject_friend_request()` |
+| `Chat` (추상 클래스) | 모든 채팅의 공통 부분 | `chat_id`, `users`, `messages` |
+| `PrivateChat` | 두 사용자 사이의 1:1 채팅 | 생성자에서 `first_user`와 `second_user`를 `users`에 추가 |
+| `GroupChat` | 여러 사용자가 참여하는 그룹 채팅 | `add_user()`, `remove_user()` |
+| `Message` | 메시지 하나 | `message_id`, `message`, `timestamp` |
+| `AddRequest` | 친구 추가 요청 하나 | `from_user_id`, `to_user_id`, `request_status`, `timestamp` |
+| `RequestStatus` (enum) | 친구 요청의 상태 | `UNREAD`, `READ`, `ACCEPTED`, `REJECTED` |
+
+- **구현 수준**: 이 코드는 클래스 구성과 각 객체가 보관하는 데이터를 보여 주는 데 집중합니다. `UserService`, `User`, `GroupChat`의 메서드는 생성자를 빼면 모두 원본 코드에서 구현되지 않은 채(`pass`) 남아 있으므로, 아래 흐름은 메서드 이름과 속성에서 읽을 수 있는 역할입니다.
+- **사용자 관리**: `UserService`는 `users_by_id`(사용자 ID → `User`)로 전체 사용자를 관리하며, 사용자 추가·삭제와 친구 요청의 생성·승인·거절을 담당합니다. 친구 요청 메서드는 `User` 객체가 아니라 `from_user_id`, `to_user_id` 같은 ID를 받으므로, `users_by_id`에서 양쪽 사용자를 찾아 각 `User`의 해당 메서드에 일을 넘기는 자리입니다.
+- **친구 요청**: 요청 하나는 `AddRequest` 객체로 표현됩니다. 보낸 쪽은 `sent_friend_requests_by_friend_id`에, 받은 쪽은 `received_friend_requests_by_friend_id`에 상대방 ID를 키로 요청을 보관합니다. 요청 상태는 `RequestStatus`로 읽지 않음(`UNREAD`), 읽음(`READ`), 수락(`ACCEPTED`), 거절(`REJECTED`)을 나타내고, 친구가 된 사용자는 `friends_by_id`(친구 ID → `User`)에 들어갑니다.
+- **채팅과 메시지**: `Chat`은 참여자 목록(`users`)과 메시지 목록(`messages`)을 갖는 공통 부모입니다. `PrivateChat`은 생성할 때 두 사용자를 바로 넣고, `GroupChat`은 `add_user()`와 `remove_user()`로 참여자를 바꿉니다. 사용자는 1:1 채팅을 친구 ID로(`friend_ids_to_private_chats`), 그룹 채팅을 채팅 ID로(`group_chats_by_id`) 찾으므로, `message_user(friend_id, message)`와 `message_group(group_id, message)`는 해당 채팅을 바로 꺼내 쓸 수 있습니다.
+- **빠진 부분**: 제약 조건에 있는 "사용자 정보 수정"과 "친구 목록에서 삭제"에 해당하는 메서드는 코드에 없습니다.
+
+## 해설 코드
+
+<Code code={source} lang="py" title="online_chat.py" />
+
+:::caution[코드를 읽을 때 주의할 점]
+`PrivateChat`의 생성자는 `super(PrivateChat, self).__init__()`에 `chat_id`를 넘기지 않으므로, 그대로 실행하면 `TypeError`가 납니다. 채팅 ID를 생성자 인자로 받아 부모에 넘겨야 합니다.
+:::
+
+## 면접에서는
+
+- **범위를 먼저 좁히세요.** 이 문제는 "텍스트 대화만", "확장성은 처음에는 고려하지 않음"이라는 가정으로 시작합니다. 지원할 워크플로를 목록으로 받아 두면 각 항목이 곧 메서드 후보가 됩니다.
+- **핵심 객체는 워크플로의 명사에서 찾으세요.** 사용자, 친구 요청, 그룹 채팅, 1:1 채팅, 메시지가 클래스가 되고, 추가·승인·거절·초대·게시 같은 동사가 메서드가 됩니다.
+- **관계를 설명하세요.** 사용자와 채팅은 다대다 관계이고, 채팅은 여러 메시지를 가지며, 친구 요청은 두 사용자를 잇는 상태 있는 객체입니다. 이 코드처럼 친구 요청은 사용자 ID로, 친구 목록과 채팅 참여자는 객체로 참조하는 식으로 무엇을 ID로 들고 무엇을 객체로 들지도 설명하면 좋습니다.
+- **확장 포인트를 짚어 두세요.** 이 문제는 확장성을 범위 밖으로 두지만, 후속 질문으로 실제 서버 구조를 물으면 클라이언트와 서버가 메시지를 주고받는 방식(HTTP, TCP, UDP 등)을 [통신](/topics/communication/) 페이지 내용에 근거해 이야기할 수 있습니다. 대규모 채팅 서비스의 사례는 [추가 시스템 설계 면접 문제](/practice/additional-questions/)의 "Design a chat app like WhatsApp", "Design the Facebook chat function" 항목에서 찾아볼 수 있습니다.
+
+## 스스로 점검하기
+
+<details>
+<summary>`PrivateChat`과 `GroupChat`을 `Chat`의 하위 클래스로 나눈 이유는 무엇인가요?</summary>
+
+둘 다 채팅 ID, 참여자 목록, 메시지 목록을 가진다는 점은 같지만, 1:1 채팅은 생성할 때 두 사용자로 고정되고 그룹 채팅은 참여자를 추가하거나 제거할 수 있다는 점이 다릅니다. 공통 데이터는 부모 클래스에, 달라지는 동작은 하위 클래스에 둡니다.
+
+</details>
+
+<details>
+<summary>친구 요청을 단순한 플래그가 아니라 `AddRequest` 객체로 둔 이유는 무엇인가요?</summary>
+
+친구 요청에는 보낸 사람, 받는 사람, 요청 시각, 상태(읽지 않음·읽음·수락·거절)가 있고, 시간이 지나며 상태가 바뀝니다. 별도 객체로 두면 보낸 쪽과 받은 쪽이 같은 요청을 각자의 딕셔너리에 보관하면서 상태 변화를 추적할 수 있습니다.
+
+</details>
+
+<details>
+<summary>특정 친구에게 메시지를 보낼 때 1:1 채팅은 어떻게 찾나요? 비용은 어느 정도인가요?</summary>
+
+`User.friend_ids_to_private_chats`가 친구 ID를 키로 개인 채팅을 보관하므로, 친구 ID로 딕셔너리를 조회하면 됩니다. 해시 테이블 조회라 평균 O(1)입니다. 그룹 채팅도 `group_chats_by_id`로 같은 방식으로 찾습니다.
+
+</details>
+
+<details>
+<summary>`Message` 클래스에 무엇을 더 추가해야 할까요?</summary>
+
+지금 `Message`에는 메시지 ID, 내용, 시각만 있어서 누가 보냈는지 알 수 없습니다. 채팅 화면에 발신자를 표시하려면 보낸 사용자의 ID 같은 발신자 정보를 추가해야 합니다.
+
+</details>

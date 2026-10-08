@@ -1,0 +1,291 @@
+---
+import { plans, type PlanId } from '~/data/plans';
+import { kindLabels, resolvePhase } from '~/utils/plan-tasks';
+import { splitTitle } from '~/utils/site';
+
+interface Props {
+	plan: PlanId;
+	phase: number;
+}
+
+const { plan, phase: index } = Astro.props;
+const phase = plans[plan].phases[index]!;
+const tasks = await resolvePhase(plan, index);
+const totalMinutes = tasks.reduce((sum, task) => sum + (task.minutes ?? 0), 0);
+---
+
+<div class="sdp-phase not-content" data-plan={plan} data-sdp-phase>
+	<div class="head">
+		<p class="goal">{phase.goal}</p>
+		<div class="badges">
+			<span class="when">{phase.when}</span>
+			{totalMinutes > 0 && <span class="when">읽기 약 {totalMinutes}분</span>}
+			<span class="count" data-phase-count>0 / {tasks.length}</span>
+		</div>
+	</div>
+	<ul class="tasks">
+		{
+			tasks.map((task) => (
+				<li class="task" data-task={task.id}>
+					<label class="box">
+						<input type="checkbox" data-sdp-task={task.id} aria-label={`${task.title} 완료 표시`} />
+						<span aria-hidden="true">
+							<svg viewBox="0 0 16 16">
+								<path
+									d="M3.5 8.5l3 3 6-7"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2.4"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						</span>
+					</label>
+					<div class="body">
+						{task.url ? (
+							<a href={task.url} {...(task.external ? { target: '_blank', rel: 'noopener' } : {})}>
+								{splitTitle(task.title).main}
+								{splitTitle(task.title).en && <span class="en">{splitTitle(task.title).en}</span>}
+								{task.external && <span class="ext">↗</span>}
+							</a>
+						) : (
+							<span class="title">{task.title}</span>
+						)}
+						<span class="meta">
+							<span class="kind" data-kind={task.kind}>
+								{kindLabels[task.kind]}
+							</span>
+							{task.minutes && <span>약 {task.minutes}분</span>}
+							{task.note && <span>{task.note}</span>}
+						</span>
+					</div>
+				</li>
+			))
+		}
+	</ul>
+</div>
+
+<script>
+	import { isDone, setDone, subscribe } from '~/scripts/progress';
+
+	for (const phase of document.querySelectorAll<HTMLElement>('[data-sdp-phase]')) {
+		const inputs = [...phase.querySelectorAll<HTMLInputElement>('input[data-sdp-task]')];
+		const counter = phase.querySelector('[data-phase-count]');
+		for (const input of inputs) {
+			input.addEventListener('change', () => setDone(input.dataset.sdpTask!, input.checked));
+		}
+		subscribe(() => {
+			let done = 0;
+			for (const input of inputs) {
+				const checked = isDone(input.dataset.sdpTask!);
+				input.checked = checked;
+				input.closest('li')?.toggleAttribute('data-done', checked);
+				if (checked) done++;
+			}
+			if (counter) counter.textContent = `${done} / ${inputs.length}`;
+			phase.toggleAttribute('data-complete', done === inputs.length);
+		});
+	}
+</script>
+
+<style>
+	.sdp-phase {
+		--tone: var(--sdp-medium);
+		margin-block: 1rem 2rem;
+		border: 1px solid var(--sdp-border);
+		border-radius: var(--sdp-radius);
+		background: var(--sdp-surface);
+		box-shadow: var(--sdp-shadow);
+		overflow: hidden;
+	}
+
+	.sdp-phase[data-plan='short'] {
+		--tone: var(--sdp-short);
+	}
+
+	.sdp-phase[data-plan='long'] {
+		--tone: var(--sdp-long);
+	}
+
+	.sdp-phase[data-complete] {
+		border-color: color-mix(in srgb, var(--sdp-success) 50%, var(--sdp-border));
+	}
+
+	.head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.6rem 1rem;
+		padding: 0.9rem 1.1rem;
+		background: var(--sdp-surface-2);
+		border-bottom: 1px solid var(--sdp-border);
+	}
+
+	.goal {
+		margin: 0;
+		flex: 1 1 18rem;
+		font-size: var(--sl-text-sm);
+		line-height: 1.6;
+		color: var(--sl-color-gray-2);
+		word-break: keep-all;
+	}
+
+	.badges {
+		display: flex;
+		gap: 0.4rem;
+		flex-wrap: wrap;
+	}
+
+	.when,
+	.count {
+		font-size: var(--sl-text-2xs);
+		font-weight: 700;
+		padding: 0.15rem 0.55rem;
+		border-radius: 999px;
+		border: 1px solid var(--sdp-border);
+		color: var(--sdp-muted);
+		white-space: nowrap;
+	}
+
+	.count {
+		font-variant-numeric: tabular-nums;
+		color: var(--tone);
+		border-color: color-mix(in srgb, var(--tone) 40%, var(--sdp-border));
+	}
+
+	[data-complete] .count {
+		color: var(--sdp-success);
+		border-color: color-mix(in srgb, var(--sdp-success) 50%, var(--sdp-border));
+	}
+
+	.tasks {
+		list-style: none;
+		margin: 0;
+		padding: 0.35rem 0;
+	}
+
+	.task {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.8rem;
+		padding: 0.55rem 1.1rem;
+		transition: background 0.15s ease;
+	}
+
+	.task:hover {
+		background: color-mix(in srgb, var(--tone) 6%, transparent);
+	}
+
+	.box {
+		position: relative;
+		flex: none;
+		margin-top: 0.15rem;
+		cursor: pointer;
+	}
+
+	.box input {
+		position: absolute;
+		inset: 0;
+		opacity: 0;
+		margin: 0;
+		cursor: pointer;
+	}
+
+	.box span {
+		display: grid;
+		place-items: center;
+		width: 1.3rem;
+		height: 1.3rem;
+		border-radius: 6px;
+		border: 1.5px solid var(--sl-color-gray-4);
+		color: transparent;
+		transition:
+			background 0.15s ease,
+			border-color 0.15s ease;
+	}
+
+	.box span svg {
+		width: 0.85rem;
+		height: 0.85rem;
+	}
+
+	.box input:focus-visible + span {
+		outline: 2px solid var(--sl-color-accent);
+		outline-offset: 2px;
+	}
+
+	.box input:checked + span {
+		background: var(--sdp-success);
+		border-color: var(--sdp-success);
+		color: #fff;
+	}
+
+	.body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		min-width: 0;
+	}
+
+	.body a,
+	.title {
+		font-weight: 600;
+		color: var(--sl-color-white);
+		text-decoration: none;
+		line-height: 1.5;
+		word-break: keep-all;
+	}
+
+	.body a:hover {
+		color: var(--sl-color-accent);
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+
+	.en {
+		margin-inline-start: 0.4rem;
+		font-size: var(--sl-text-2xs);
+		font-weight: 500;
+		color: var(--sdp-muted);
+	}
+
+	.ext {
+		margin-inline-start: 0.25rem;
+		font-size: 0.8em;
+		color: var(--sdp-muted);
+	}
+
+	.task[data-done] .body a,
+	.task[data-done] .title {
+		color: var(--sdp-muted);
+		text-decoration: line-through;
+		text-decoration-color: color-mix(in srgb, var(--sdp-muted) 60%, transparent);
+	}
+
+	.meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.25rem 0.7rem;
+		font-size: var(--sl-text-2xs);
+		color: var(--sdp-muted);
+	}
+
+	.kind {
+		font-weight: 700;
+		color: var(--tone);
+	}
+
+	.kind[data-kind='practice'] {
+		color: var(--sl-color-orange);
+	}
+
+	:global(:root[data-theme='light']) .kind[data-kind='practice'] {
+		color: var(--sl-color-orange-high);
+	}
+
+	.kind[data-kind='review'] {
+		color: var(--sdp-success);
+	}
+</style>

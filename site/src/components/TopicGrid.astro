@@ -1,0 +1,198 @@
+---
+import { getEntry } from 'astro:content';
+import { topicGroups } from '~/data/topics';
+import { href, splitTitle } from '~/utils/site';
+
+const groups = await Promise.all(
+	topicGroups.map(async (group) => ({
+		...group,
+		items: await Promise.all(
+			group.pages.map(async (page) => {
+				const entry = await getEntry('docs', page);
+				if (!entry) throw new Error(`Topic map references a missing page: ${page}`);
+				return { page, ...splitTitle(entry.data.title), description: entry.data.description ?? '' };
+			}),
+		),
+	})),
+);
+---
+
+<div class="sdp-topic-map not-content">
+	{
+		groups.map((group, index) => (
+			<section class="group">
+				<header>
+					<span class="index">{String(index + 1).padStart(2, '0')}</span>
+					<div>
+						<h3>{group.title}</h3>
+						<p>{group.summary}</p>
+					</div>
+				</header>
+				<ul>
+					{group.items.map((item) => (
+						<li>
+							<a href={href(item.page)} data-sdp-topic={item.page}>
+								<span class="title">{item.main}</span>
+								{item.en && <span class="en">{item.en}</span>}
+								<span class="desc">{item.description}</span>
+							</a>
+						</li>
+					))}
+				</ul>
+			</section>
+		))
+	}
+</div>
+
+<script>
+	import { doneIds, subscribe } from '~/scripts/progress';
+
+	const links = [...document.querySelectorAll<HTMLElement>('[data-sdp-topic]')];
+	subscribe(() => {
+		const done = doneIds();
+		for (const link of links) link.toggleAttribute('data-done', done.has(link.dataset.sdpTopic!));
+	});
+</script>
+
+<style>
+	.sdp-topic-map {
+		display: grid;
+		gap: 1rem;
+		margin-block: 1.5rem;
+	}
+
+	.group {
+		display: grid;
+		gap: 0.9rem 1.5rem;
+		padding: 1.1rem;
+		border: 1px solid var(--sdp-border);
+		border-radius: var(--sdp-radius);
+		background: var(--sdp-surface);
+		box-shadow: var(--sdp-shadow);
+	}
+
+	header {
+		display: flex;
+		gap: 0.85rem;
+		align-items: flex-start;
+	}
+
+	.index {
+		flex: none;
+		display: grid;
+		place-items: center;
+		width: 2.1rem;
+		height: 2.1rem;
+		border-radius: 10px;
+		font-size: var(--sl-text-xs);
+		font-weight: 800;
+		font-variant-numeric: tabular-nums;
+		color: var(--sl-color-accent-high);
+		background: var(--sl-color-accent-low);
+	}
+
+	:global(:root[data-theme='light']) .index {
+		color: var(--sl-color-accent);
+	}
+
+	h3 {
+		margin: 0;
+		font-size: 1.05rem;
+		font-weight: 750;
+		color: var(--sl-color-white);
+	}
+
+	header p {
+		margin: 0.15rem 0 0;
+		font-size: var(--sl-text-sm);
+		color: var(--sdp-muted);
+		word-break: keep-all;
+	}
+
+	ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 0.6rem;
+		grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+	}
+
+	a {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		height: 100%;
+		padding: 0.75rem 0.9rem;
+		border-radius: 10px;
+		border: 1px solid var(--sdp-border);
+		background: var(--sdp-surface-2);
+		text-decoration: none;
+		transition:
+			border-color 0.15s ease,
+			transform 0.15s ease;
+	}
+
+	a:hover {
+		border-color: var(--sl-color-accent);
+		transform: translateY(-1px);
+	}
+
+	.title {
+		font-weight: 700;
+		color: var(--sl-color-white);
+		word-break: keep-all;
+		padding-inline-end: 1.4rem;
+		line-height: 1.45;
+	}
+
+	.en {
+		margin-top: -0.2rem;
+		font-size: var(--sl-text-2xs);
+		font-weight: 600;
+		letter-spacing: 0.01em;
+		color: var(--sl-color-accent-high);
+		opacity: 0.8;
+	}
+
+	:global(:root[data-theme='light']) .en {
+		color: var(--sl-color-accent);
+	}
+
+	@media (min-width: 72rem) {
+		.group {
+			grid-template-columns: 15rem minmax(0, 1fr);
+			align-items: start;
+		}
+
+		header {
+			position: sticky;
+			top: calc(var(--sl-nav-height) + 1rem);
+		}
+	}
+
+	.desc {
+		font-size: var(--sl-text-xs);
+		line-height: 1.6;
+		color: var(--sdp-muted);
+		word-break: keep-all;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	a[data-done]::after {
+		content: '';
+		position: absolute;
+		top: 0.8rem;
+		inset-inline-end: 0.8rem;
+		width: 1rem;
+		height: 1rem;
+		border-radius: 999px;
+		background: var(--sdp-success)
+			url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 8.5l2.6 2.5L12 5.5'/%3E%3C/svg%3E")
+			center / 80% no-repeat;
+	}
+</style>

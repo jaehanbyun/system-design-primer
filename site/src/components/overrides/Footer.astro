@@ -1,0 +1,52 @@
+---
+import Default from '@astrojs/starlight/components/Footer.astro';
+import CompleteToggle from '../CompleteToggle.astro';
+import { href, isTrackable } from '~/utils/site';
+
+const { entry, id } = Astro.locals.starlightRoute;
+const trackable = isTrackable(id, entry.data.trackable);
+---
+
+{trackable && <CompleteToggle id={id} />}
+<Default />
+<p class="sdp-attribution">
+	원저작물:{' '}
+	<a href="https://github.com/donnemartin/system-design-primer" target="_blank" rel="noopener">The System Design Primer</a>
+	{' '}© Donne Martin,{' '}
+	<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>. 이 사이트는 원문을
+	한국어로 옮기고 학습용으로 재구성했습니다. <a href={href('about')}>자세히 보기</a>
+</p>
+
+<script>
+	import { doneIds, idFromPath, subscribe } from '~/scripts/progress';
+
+	const links = [...document.querySelectorAll<HTMLAnchorElement>('.sidebar-content a[href]')];
+	subscribe(() => {
+		const done = doneIds();
+		for (const link of links) {
+			const id = idFromPath(new URL(link.href).pathname);
+			link.toggleAttribute('data-sdp-done', done.has(id));
+		}
+	});
+</script>
+
+<style>
+	.sdp-attribution {
+		margin-top: 1.5rem;
+		padding-top: 1.25rem;
+		border-top: 1px solid var(--sdp-border);
+		font-size: var(--sl-text-xs);
+		line-height: 1.7;
+		color: var(--sdp-muted);
+		text-align: center;
+		word-break: keep-all;
+	}
+
+	.sdp-attribution a {
+		color: inherit;
+	}
+
+	.sdp-attribution a:hover {
+		color: var(--sl-color-accent);
+	}
+</style>

@@ -1,0 +1,673 @@
+---
+import { getEntry } from 'astro:content';
+import { flashcards, type FlashcardDeck } from '~/data/flashcards';
+import { href } from '~/utils/site';
+
+const deckLabels: Record<FlashcardDeck, string> = {
+	concepts: '핵심 개념',
+	problems: '시스템 설계 문제',
+	ood: '객체 지향 설계',
+};
+
+const topics = [...new Set(flashcards.map((card) => card.topic))];
+const topicInfo: Record<string, { title: string; url: string }> = {};
+for (const topic of topics) {
+	const entry = await getEntry('docs', topic);
+	if (!entry) throw new Error(`Flashcard references a missing page: ${topic}`);
+	topicInfo[topic] = { title: entry.data.title, url: href(topic) };
+}
+
+const counts = flashcards.reduce<Record<string, number>>((acc, card) => {
+	acc[card.deck] = (acc[card.deck] ?? 0) + 1;
+	return acc;
+}, {});
+---
+
+<div
+	class="sdp-cards not-content"
+	data-sdp-flashcards
+	data-cards={JSON.stringify(flashcards)}
+	data-topics={JSON.stringify(topicInfo)}
+	data-decks={JSON.stringify(deckLabels)}
+>
+	<div class="toolbar">
+		<div class="decks" role="group" aria-label="덱 선택">
+			<button type="button" data-deck="all" aria-pressed="true">전체 <span>{flashcards.length}</span></button>
+			{
+				(Object.keys(deckLabels) as FlashcardDeck[]).map((deck) => (
+					<button type="button" data-deck={deck} aria-pressed="false">
+						{deckLabels[deck]} <span>{counts[deck] ?? 0}</span>
+					</button>
+				))
+			}
+		</div>
+		<div class="filters">
+			<label class="select">
+				<span class="sr-only">주제</span>
+				<select data-topic>
+					<option value="">모든 주제</option>
+					{topics.map((topic) => <option value={topic}>{topicInfo[topic]!.title}</option>)}
+				</select>
+			</label>
+			<label class="check">
+				<input type="checkbox" data-only-again />
+				<span>다시 볼 카드만</span>
+			</label>
+			<button type="button" class="icon-button" data-shuffle title="섞기">
+				<svg viewBox="0 0 16 16" aria-hidden="true"
+					><path
+						d="M2 4.5h2.2c1.5 0 2.4.7 3.2 2l1.2 2c.8 1.3 1.7 2 3.2 2H14M12 9l2 1.5-2 1.5M2 11.5h2.2c.9 0 1.6-.3 2.2-.8M9.6 5.3c.6-.5 1.3-.8 2.2-.8H14M12 3l2 1.5L12 6"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="1.4"
+						stroke-linecap="round"
+						stroke-linejoin="round"></path></svg
+				>
+				섞기
+			</button>
+		</div>
+	</div>
+
+	<div class="stage">
+		<div class="card" data-card tabindex="0" role="button" aria-label="카드 뒤집기">
+			<div class="face front">
+				<div class="face-top">
+					<span class="deck-badge" data-front-deck></span>
+					<span class="topic" data-front-topic></span>
+				</div>
+				<p class="question" data-question></p>
+				<span class="hint">클릭하거나 Space 키로 뒤집기</span>
+			</div>
+			<div class="face back">
+				<div class="face-top">
+					<span class="deck-badge answer">정답</span>
+					<a class="more" data-more href="#">자세히 보기 →</a>
+				</div>
+				<div class="answer" data-answer></div>
+			</div>
+		</div>
+		<div class="empty" data-empty hidden>
+			<p>조건에 맞는 카드가 없어요.</p>
+			<p class="sub">“다시 볼 카드만”을 끄거나 다른 덱을 골라 보세요.</p>
+		</div>
+	</div>
+
+	<div class="controls">
+		<button type="button" class="nav" data-prev aria-label="이전 카드">←</button>
+		<span class="position" data-position>0 / 0</span>
+		<button type="button" class="nav" data-next aria-label="다음 카드">→</button>
+		<span class="spacer"></span>
+		<button type="button" class="grade again" data-grade="again">다시 볼래요 <kbd>1</kbd></button>
+		<button type="button" class="grade known" data-grade="known">알고 있어요 <kbd>2</kbd></button>
+	</div>
+
+	<div class="stats">
+		<div class="meter" aria-hidden="true">
+			<span class="known-bar" data-known-bar></span>
+			<span class="again-bar" data-again-bar></span>
+		</div>
+		<p>
+			<span class="dot known"></span>알고 있어요 <strong data-known-count>0</strong>
+			<span class="dot again"></span>다시 볼래요 <strong data-again-count>0</strong>
+			<span class="dot"></span>아직 안 봄 <strong data-new-count>0</strong>
+			<button type="button" class="reset" data-reset>기록 초기화</button>
+		</p>
+	</div>
+</div>
+
+<script>
+	type Card = { id: string; deck: string; topic: string; front: string; back: string };
+	type Grade = 'known' | 'again';
+	const KEY = 'sdp:cards:v1';
+
+	const loadGrades = (): Record<string, Grade> => {
+		try {
+			return JSON.parse(localStorage.getItem(KEY) || '{}');
+		} catch {
+			return {};
+		}
+	};
+	const saveGrades = (grades: Record<string, Grade>) => {
+		try {
+			localStorage.setItem(KEY, JSON.stringify(grades));
+		} catch {
+			// Ignore quota/private-mode errors; grading still works for this visit.
+		}
+	};
+
+	for (const root of document.querySelectorAll<HTMLElement>('[data-sdp-flashcards]')) {
+		const all: Card[] = JSON.parse(root.dataset.cards!);
+		const topics: Record<string, { title: string; url: string }> = JSON.parse(root.dataset.topics!);
+		const decks: Record<string, string> = JSON.parse(root.dataset.decks!);
+		const $ = <T extends Element = HTMLElement>(selector: string) => root.querySelector<T>(selector)!;
+
+		const card = $('[data-card]');
+		const topicSelect = $<HTMLSelectElement>('[data-topic]');
+		const onlyAgain = $<HTMLInputElement>('[data-only-again]');
+		let grades = loadGrades();
+		let deck = 'all';
+		let order: Card[] = [];
+		let index = 0;
+
+		const params = new URLSearchParams(location.search);
+		if (params.get('topic') && topics[params.get('topic')!]) topicSelect.value = params.get('topic')!;
+
+		function rebuild(shuffle = false) {
+			order = all.filter(
+				(c) =>
+					(deck === 'all' || c.deck === deck) &&
+					(!topicSelect.value || c.topic === topicSelect.value) &&
+					(!onlyAgain.checked || grades[c.id] === 'again'),
+			);
+			if (shuffle) {
+				for (let i = order.length - 1; i > 0; i--) {
+					const j = Math.floor(Math.random() * (i + 1));
+					[order[i], order[j]] = [order[j]!, order[i]!];
+				}
+			}
+			index = 0;
+			render();
+		}
+
+		function render() {
+			const current = order[index];
+			card.classList.remove('flipped');
+			$('[data-empty]').hidden = Boolean(current);
+			card.hidden = !current;
+			$('[data-position]').textContent = order.length ? `${index + 1} / ${order.length}` : '0 / 0';
+			if (current) {
+				$('[data-front-deck]').textContent = decks[current.deck] ?? current.deck;
+				$('[data-front-topic]').textContent = topics[current.topic]?.title ?? '';
+				$('[data-question]').innerHTML = current.front;
+				$('[data-answer]').innerHTML = current.back;
+				$<HTMLAnchorElement>('[data-more]').href = topics[current.topic]?.url ?? '#';
+				card.dataset.grade = grades[current.id] ?? '';
+			}
+			const scope = all.filter(
+				(c) => (deck === 'all' || c.deck === deck) && (!topicSelect.value || c.topic === topicSelect.value),
+			);
+			const known = scope.filter((c) => grades[c.id] === 'known').length;
+			const again = scope.filter((c) => grades[c.id] === 'again').length;
+			$('[data-known-count]').textContent = String(known);
+			$('[data-again-count]').textContent = String(again);
+			$('[data-new-count]').textContent = String(scope.length - known - again);
+			$('[data-known-bar]').style.width = `${scope.length ? (known / scope.length) * 100 : 0}%`;
+			$('[data-again-bar]').style.width = `${scope.length ? (again / scope.length) * 100 : 0}%`;
+		}
+
+		const flip = () => order.length && card.classList.toggle('flipped');
+		const move = (step: number) => {
+			if (!order.length) return;
+			index = (index + step + order.length) % order.length;
+			render();
+		};
+		const grade = (value: Grade) => {
+			const current = order[index];
+			if (!current) return;
+			grades = { ...grades, [current.id]: value };
+			saveGrades(grades);
+			if (onlyAgain.checked && value === 'known') {
+				order.splice(index, 1);
+				if (index >= order.length) index = 0;
+				render();
+			} else {
+				move(1);
+			}
+		};
+
+		card.addEventListener('click', (event) => {
+			if ((event.target as Element).closest('a')) return;
+			flip();
+		});
+		$('[data-prev]').addEventListener('click', () => move(-1));
+		$('[data-next]').addEventListener('click', () => move(1));
+		$('[data-shuffle]').addEventListener('click', () => rebuild(true));
+		root.querySelectorAll<HTMLButtonElement>('[data-grade]').forEach((button) =>
+			button.addEventListener('click', () => grade(button.dataset.grade as Grade)),
+		);
+		root.querySelectorAll<HTMLButtonElement>('[data-deck]').forEach((button) =>
+			button.addEventListener('click', () => {
+				deck = button.dataset.deck!;
+				root
+					.querySelectorAll('[data-deck]')
+					.forEach((other) => other.setAttribute('aria-pressed', String(other === button)));
+				rebuild();
+			}),
+		);
+		topicSelect.addEventListener('change', () => rebuild());
+		onlyAgain.addEventListener('change', () => rebuild());
+		$('[data-reset]').addEventListener('click', () => {
+			if (!confirm('플래시카드 기록(알고 있어요/다시 볼래요)을 모두 지울까요?')) return;
+			grades = {};
+			saveGrades(grades);
+			rebuild();
+		});
+
+		document.addEventListener('keydown', (event) => {
+			const target = event.target as HTMLElement;
+			if (target.closest('input, textarea, select, [contenteditable]') || document.querySelector('dialog[open]')) return;
+			if (event.metaKey || event.ctrlKey || event.altKey) return;
+			if (event.key === ' ' || event.key === 'Enter') {
+				if (target !== card && target !== document.body) return;
+				event.preventDefault();
+				flip();
+			} else if (event.key === 'ArrowRight') move(1);
+			else if (event.key === 'ArrowLeft') move(-1);
+			else if (event.key === '1') grade('again');
+			else if (event.key === '2') grade('known');
+		});
+
+		rebuild();
+	}
+</script>
+
+<style>
+	.sdp-cards {
+		display: grid;
+		gap: 1rem;
+		margin-block: 1.5rem;
+	}
+
+	.toolbar {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+
+	.decks,
+	.filters {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.decks button,
+	.icon-button {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.35rem 0.75rem;
+		border-radius: 999px;
+		border: 1px solid var(--sdp-border);
+		background: var(--sdp-surface);
+		color: var(--sl-color-gray-2);
+		font: inherit;
+		font-size: var(--sl-text-xs);
+		font-weight: 650;
+		cursor: pointer;
+	}
+
+	.decks button span {
+		font-variant-numeric: tabular-nums;
+		color: var(--sdp-muted);
+	}
+
+	.decks button[aria-pressed='true'] {
+		background: var(--sl-color-accent);
+		border-color: var(--sl-color-accent);
+		color: #fff;
+	}
+
+	.decks button[aria-pressed='true'] span {
+		color: rgba(255, 255, 255, 0.8);
+	}
+
+	.icon-button svg {
+		width: 0.95rem;
+		height: 0.95rem;
+	}
+
+	.decks button:hover,
+	.icon-button:hover {
+		border-color: var(--sl-color-accent);
+	}
+
+	select {
+		max-width: 12rem;
+		padding: 0.35rem 0.6rem;
+		border-radius: 8px;
+		border: 1px solid var(--sdp-border);
+		background: var(--sdp-surface);
+		color: var(--sl-color-white);
+		font: inherit;
+		font-size: var(--sl-text-xs);
+	}
+
+	.check {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-size: var(--sl-text-xs);
+		color: var(--sl-color-gray-2);
+		cursor: pointer;
+	}
+
+	.check input {
+		accent-color: var(--sl-color-accent);
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+	}
+
+	.stage {
+		perspective: 1600px;
+	}
+
+	.card {
+		position: relative;
+		display: grid;
+		min-height: 17rem;
+		cursor: pointer;
+		transform-style: preserve-3d;
+		transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.2, 1);
+		outline: none;
+	}
+
+	.card[hidden] {
+		display: none;
+	}
+
+	.card.flipped {
+		transform: rotateY(180deg);
+	}
+
+	.card:focus-visible .face {
+		outline: 2px solid var(--sl-color-accent);
+		outline-offset: 3px;
+	}
+
+	.face {
+		grid-area: 1 / 1;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		padding: 1.4rem 1.5rem;
+		border-radius: 18px;
+		border: 1px solid var(--sdp-border);
+		background:
+			linear-gradient(var(--sdp-grid-line) 1px, transparent 1px) 0 0 / 100% 28px,
+			var(--sdp-surface);
+		box-shadow: var(--sdp-shadow);
+		backface-visibility: hidden;
+		-webkit-backface-visibility: hidden;
+	}
+
+	.back {
+		transform: rotateY(180deg);
+		background: var(--sdp-surface);
+		border-color: color-mix(in srgb, var(--sl-color-accent) 45%, var(--sdp-border));
+	}
+
+	.card[data-grade='known'] .front {
+		border-color: color-mix(in srgb, var(--sdp-success) 55%, var(--sdp-border));
+	}
+
+	.card[data-grade='again'] .front {
+		border-color: color-mix(in srgb, var(--sl-color-orange) 55%, var(--sdp-border));
+	}
+
+	.face-top {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+
+	.deck-badge {
+		padding: 0.1rem 0.55rem;
+		border-radius: 999px;
+		font-size: var(--sl-text-2xs);
+		font-weight: 800;
+		color: var(--sl-color-accent-high);
+		background: var(--sl-color-accent-low);
+	}
+
+	:global(:root[data-theme='light']) .deck-badge {
+		color: var(--sl-color-accent);
+	}
+
+	.deck-badge.answer {
+		color: #fff;
+		background: var(--sl-color-accent);
+	}
+
+	.topic {
+		font-size: var(--sl-text-xs);
+		color: var(--sdp-muted);
+	}
+
+	.question {
+		margin: auto 0;
+		font-size: clamp(1.15rem, 1rem + 0.8vw, 1.45rem);
+		font-weight: 750;
+		line-height: 1.5;
+		letter-spacing: -0.02em;
+		color: var(--sl-color-white);
+		word-break: keep-all;
+		text-align: center;
+		text-wrap: balance;
+	}
+
+	.hint {
+		align-self: center;
+		font-size: var(--sl-text-2xs);
+		color: var(--sdp-muted);
+	}
+
+	.answer {
+		font-size: var(--sl-text-base);
+		line-height: 1.75;
+		color: var(--sl-color-gray-1);
+		word-break: keep-all;
+	}
+
+	.answer :global(p) {
+		margin: 0 0 0.6rem;
+	}
+
+	.answer :global(ul) {
+		margin: 0.25rem 0 0.6rem;
+		padding-inline-start: 1.2rem;
+	}
+
+	.answer :global(li + li) {
+		margin-top: 0.2rem;
+	}
+
+	.answer :global(strong) {
+		color: var(--sl-color-white);
+	}
+
+	.answer :global(code) {
+		padding: 0.05rem 0.35rem;
+		border-radius: 5px;
+		font-size: 0.88em;
+		background: var(--sdp-surface-2);
+	}
+
+	.more {
+		font-size: var(--sl-text-xs);
+		font-weight: 650;
+		color: var(--sl-color-accent);
+		text-decoration: none;
+	}
+
+	:global(:root:not([data-theme='light'])) .more {
+		color: var(--sl-color-accent-high);
+	}
+
+	.more:hover {
+		text-decoration: underline;
+	}
+
+	.empty {
+		padding: 3rem 1rem;
+		text-align: center;
+		border: 1px dashed var(--sdp-border);
+		border-radius: 18px;
+	}
+
+	.empty p {
+		margin: 0;
+		font-weight: 700;
+		color: var(--sl-color-white);
+	}
+
+	.empty .sub {
+		margin-top: 0.3rem;
+		font-weight: 400;
+		font-size: var(--sl-text-sm);
+		color: var(--sdp-muted);
+	}
+
+	.controls {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.nav {
+		width: 2.4rem;
+		height: 2.4rem;
+		border-radius: 10px;
+		border: 1px solid var(--sdp-border);
+		background: var(--sdp-surface);
+		color: var(--sl-color-white);
+		font: inherit;
+		font-size: 1rem;
+		cursor: pointer;
+	}
+
+	.nav:hover {
+		border-color: var(--sl-color-accent);
+	}
+
+	.position {
+		min-width: 4.5rem;
+		text-align: center;
+		font-size: var(--sl-text-sm);
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		color: var(--sl-color-gray-2);
+	}
+
+	.spacer {
+		flex: 1;
+	}
+
+	.grade {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		padding: 0.55rem 0.95rem;
+		border-radius: 10px;
+		border: 1px solid;
+		font: inherit;
+		font-size: var(--sl-text-sm);
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.grade kbd {
+		padding: 0 0.35rem;
+		border-radius: 4px;
+		font-family: var(--__sl-font-mono);
+		font-size: var(--sl-text-2xs);
+		background: rgba(255, 255, 255, 0.18);
+	}
+
+	.grade.again {
+		color: var(--sl-color-orange);
+		border-color: color-mix(in srgb, var(--sl-color-orange) 50%, transparent);
+		background: color-mix(in srgb, var(--sl-color-orange) 10%, transparent);
+	}
+
+	:global(:root[data-theme='light']) .grade.again {
+		color: var(--sl-color-orange-high);
+	}
+
+	.grade.known {
+		color: #fff;
+		border-color: var(--sdp-success);
+		background: var(--sdp-success);
+	}
+
+	.stats {
+		display: grid;
+		gap: 0.5rem;
+	}
+
+	.meter {
+		display: flex;
+		height: 0.4rem;
+		border-radius: 999px;
+		overflow: hidden;
+		background: var(--sdp-surface-2);
+		box-shadow: inset 0 0 0 1px var(--sdp-border);
+	}
+
+	.known-bar {
+		background: var(--sdp-success);
+		transition: width 0.3s ease;
+	}
+
+	.again-bar {
+		background: var(--sl-color-orange);
+		transition: width 0.3s ease;
+	}
+
+	.stats p {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.35rem 0.5rem;
+		margin: 0;
+		font-size: var(--sl-text-xs);
+		color: var(--sdp-muted);
+	}
+
+	.stats strong {
+		margin-inline-end: 0.6rem;
+		color: var(--sl-color-white);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.dot {
+		width: 0.55rem;
+		height: 0.55rem;
+		border-radius: 999px;
+		background: var(--sdp-surface-2);
+		box-shadow: inset 0 0 0 1px var(--sdp-border);
+	}
+
+	.dot.known {
+		background: var(--sdp-success);
+		box-shadow: none;
+	}
+
+	.dot.again {
+		background: var(--sl-color-orange);
+		box-shadow: none;
+	}
+
+	.reset {
+		margin-inline-start: auto;
+		padding: 0.2rem 0.5rem;
+		border: 0;
+		background: none;
+		color: var(--sdp-muted);
+		font: inherit;
+		font-size: var(--sl-text-2xs);
+		cursor: pointer;
+		text-decoration: underline;
+	}
+</style>

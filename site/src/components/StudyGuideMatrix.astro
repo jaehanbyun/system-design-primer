@@ -1,0 +1,208 @@
+---
+import { planOrder, plans, studyGuideMatrix } from '~/data/plans';
+import { href } from '~/utils/site';
+
+const intensity: Record<string, number> = { '✓': 3, 일부: 1, 많이: 2, 대부분: 3 };
+---
+
+<div class="sdp-matrix not-content" role="region" aria-label="학습 기간별 권장 활동" tabindex="0">
+	<table>
+		<thead>
+			<tr>
+				<th scope="col">활동</th>
+				{
+					planOrder.map((id) => (
+						<th scope="col">
+							<a class="sdp-chip" data-plan={id} href={href(`guide/${id}`)}>
+								{plans[id].label}
+							</a>
+							<span class="dur">{plans[id].duration}</span>
+						</th>
+					))
+				}
+			</tr>
+		</thead>
+		<tbody>
+			{
+				studyGuideMatrix.map((row) => (
+					<tr>
+						<th scope="row">
+							<a href={href(row.href)}>{row.activity}</a>
+						</th>
+						{planOrder.map((id) => {
+							const value = row[id];
+							return (
+								<td data-plan={id}>
+									{value === '✓' ? (
+										<span class="check" aria-label="권장">
+											<svg viewBox="0 0 16 16" aria-hidden="true">
+												<path
+													d="M3.5 8.5l3 3 6-7"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2.2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+												/>
+											</svg>
+										</span>
+									) : (
+										<span class="level" data-level={intensity[value]}>
+											<span class="bars" aria-hidden="true">
+												<i />
+												<i />
+												<i />
+											</span>
+											{value}
+										</span>
+									)}
+								</td>
+							);
+						})}
+					</tr>
+				))
+			}
+		</tbody>
+	</table>
+</div>
+
+<style>
+	.sdp-matrix {
+		margin-block: 1.5rem;
+		overflow-x: auto;
+		border: 1px solid var(--sdp-border);
+		border-radius: var(--sdp-radius);
+		background: var(--sdp-surface);
+		box-shadow: var(--sdp-shadow);
+	}
+
+	table {
+		width: 100%;
+		min-width: 36rem;
+		border-collapse: collapse;
+		font-size: var(--sl-text-sm);
+	}
+
+	th,
+	td {
+		padding: 0.8rem 1rem;
+		border-bottom: 1px solid var(--sdp-border);
+		text-align: center;
+		vertical-align: middle;
+	}
+
+	tbody tr:last-child > * {
+		border-bottom: 0;
+	}
+
+	thead th {
+		background: var(--sdp-surface-2);
+		font-weight: 700;
+		color: var(--sl-color-white);
+		white-space: nowrap;
+	}
+
+	thead th:first-child,
+	tbody th {
+		text-align: start;
+	}
+
+	thead th .sdp-chip {
+		font-size: var(--sl-text-xs);
+	}
+
+	.dur {
+		display: block;
+		margin-top: 0.2rem;
+		font-size: var(--sl-text-2xs);
+		font-weight: 500;
+		color: var(--sdp-muted);
+	}
+
+	tbody th {
+		font-weight: 500;
+		line-height: 1.55;
+		word-break: keep-all;
+	}
+
+	tbody th a {
+		color: var(--sl-color-gray-1);
+		text-decoration: none;
+		background-image: linear-gradient(currentColor, currentColor);
+		background-size: 0 1px;
+		background-repeat: no-repeat;
+		background-position: 0 100%;
+		transition: background-size 0.2s ease;
+	}
+
+	tbody th a:hover {
+		color: var(--sl-color-accent);
+		background-size: 100% 1px;
+	}
+
+	td {
+		--tone: var(--sdp-medium);
+		width: 7.5rem;
+	}
+
+	td[data-plan='short'] {
+		--tone: var(--sdp-short);
+	}
+
+	td[data-plan='long'] {
+		--tone: var(--sdp-long);
+	}
+
+	.check {
+		display: inline-grid;
+		place-items: center;
+		width: 1.6rem;
+		height: 1.6rem;
+		border-radius: 999px;
+		color: var(--tone);
+		background: color-mix(in srgb, var(--tone) 14%, transparent);
+	}
+
+	.check svg {
+		width: 0.95rem;
+		height: 0.95rem;
+	}
+
+	.level {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-weight: 700;
+		color: var(--tone);
+		white-space: nowrap;
+	}
+
+	.bars {
+		display: inline-flex;
+		align-items: flex-end;
+		gap: 2px;
+		height: 0.9rem;
+	}
+
+	.bars i {
+		width: 4px;
+		border-radius: 2px;
+		background: color-mix(in srgb, var(--tone) 22%, transparent);
+	}
+
+	.bars i:nth-child(1) {
+		height: 40%;
+	}
+	.bars i:nth-child(2) {
+		height: 70%;
+	}
+	.bars i:nth-child(3) {
+		height: 100%;
+	}
+
+	.level[data-level='1'] .bars i:nth-child(-n + 1),
+	.level[data-level='2'] .bars i:nth-child(-n + 2),
+	.level[data-level='3'] .bars i:nth-child(-n + 3) {
+		background: var(--tone);
+	}
+</style>
